@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Baloo+2:wght@600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base
+--------------------------------------------------------------------------- */
+@layer base {
+    html {
+        scroll-behavior: smooth;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-canvas font-sans text-ink antialiased;
+    }
+
+    ::selection {
+        @apply bg-primary text-white;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Reusable component classes (mobile-first)
+--------------------------------------------------------------------------- */
+@layer components {
+    /* Glassmorphism card — dashboards + sticky nav share the same recipe */
+    .glass-card {
+        @apply rounded-2xl border border-white/60 bg-white/80 shadow-card backdrop-blur-xl;
+    }
+
+    .stat-card {
+        @apply glass-card relative overflow-hidden p-5 transition-shadow duration-300 hover:shadow-card-hover;
+    }
+
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold
+               transition-all duration-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/25
+               disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    .btn-primary {
+        @apply btn bg-primary text-white hover:bg-primary-600 active:scale-[0.98];
+    }
+
+    .btn-secondary {
+        @apply btn bg-secondary text-white hover:bg-secondary-600 active:scale-[0.98];
+    }
+
+    .btn-accent {
+        @apply btn bg-accent text-ink hover:bg-accent-600 active:scale-[0.98];
+    }
+
+    .btn-ghost {
+        @apply btn border border-slate-200 bg-white text-ink hover:border-primary/40 hover:text-primary;
+    }
+
+    .input {
+        @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-ink
+               placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10;
+    }
+
+    .label {
+        @apply mb-1.5 block text-sm font-semibold text-slate-700;
+    }
+
+    .badge {
+        @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold;
+    }
+
+    .section-title {
+        @apply font-display text-2xl font-bold text-ink sm:text-3xl lg:text-4xl;
+    }
+
+    /* Fixed-size chart hosts prevent layout jumps while Recharts boots */
+    .chart-box {
+        @apply relative h-72 w-full sm:h-80;
+    }
+
+    .chart-box-sm {
+        @apply relative h-56 w-full sm:h-64;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Utilities
+--------------------------------------------------------------------------- */
+@layer utilities {
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        @apply rounded-full bg-slate-300;
+    }
+
+    .text-balance {
+        text-wrap: balance;
+    }
+}
+
