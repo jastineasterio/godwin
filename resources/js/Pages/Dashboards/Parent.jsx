@@ -12,6 +12,7 @@ import {
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard, DonutChart } from '../../Components/charts';
+import { BRAND } from '../../Components/ui';
 
 /* ===========================================================================
  * PARENT PORTAL — multi-child selector
@@ -43,6 +44,7 @@ const initials = (name = '') =>
 
 export default function Parent({ children, activeChildId, stats, profile, charts, invoices }) {
     const statIcons = [Percent, Users, CalendarCheck2, Banknote];
+    const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
     // Instant child switch — preserves state so the dashboard never flashes
     const switchChild = (id) => {
@@ -129,7 +131,7 @@ export default function Parent({ children, activeChildId, stats, profile, charts
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className="mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary-600 to-rose-900 p-5 text-white shadow-card sm:p-6"
+                className="mt-6 overflow-hidden rounded-2xl bg-gradient-to-br from-[#013157] via-[#01579B] to-[#0288D1] p-5 text-white shadow-card sm:p-6"
             >
                 <div className="flex flex-wrap items-center gap-5">
                     <span className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-white/15 font-display text-2xl font-extrabold backdrop-blur">
@@ -173,6 +175,8 @@ export default function Parent({ children, activeChildId, stats, profile, charts
                         label={stat.label}
                         value={stat.value}
                         accent={stat.accent}
+                        variant="filled"
+                        fill={statFills[i]}
                     />
                 ))}
             </div>
@@ -188,7 +192,7 @@ export default function Parent({ children, activeChildId, stats, profile, charts
                         data={charts.subjectGrades}
                         xKey="subject"
                         yKey="score"
-                        color="#D81B60"
+                        color={BRAND.primary}
                         unit="%"
                     />
                 </ChartCard>
@@ -200,7 +204,7 @@ export default function Parent({ children, activeChildId, stats, profile, charts
                 >
                     <DonutChart
                         data={charts.attendanceDonut}
-                        colors={['#D81B60', '#FBC02D', '#0288D1', '#94A3B8']}
+                        colors={[BRAND.primary, BRAND.accent, BRAND.secondary, '#94A3B8']}
                     />
                 </ChartCard>
             </div>

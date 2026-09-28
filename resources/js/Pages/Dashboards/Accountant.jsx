@@ -2,6 +2,7 @@ import { Banknote, Receipt, TrendingDown, Wallet } from 'lucide-react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { ChartCard, DonutChart, GroupedBarChart } from '../../Components/charts';
+import { BRAND } from '../../Components/ui';
 
 /* ===========================================================================
  * ACCOUNTANT DASHBOARD — dedicated financial module
@@ -24,6 +25,7 @@ const STATUS_TONES = {
 
 export default function Accountant({ stats, charts, transactions, currency }) {
     const statIcons = [Banknote, Wallet, Receipt, TrendingDown];
+    const statFills = ['bg-emerald-500', 'bg-amber-500', 'bg-sky-500', 'bg-purple-500'];
 
     // Collection progress from the doughnut slices
     const collected = charts.collection.find((c) => c.name === 'Collected')?.value ?? 0;
@@ -49,6 +51,8 @@ export default function Accountant({ stats, charts, transactions, currency }) {
                         label={stat.label}
                         value={stat.value}
                         accent={stat.accent}
+                        variant="filled"
+                        fill={statFills[i]}
                     />
                 ))}
             </div>
@@ -64,10 +68,10 @@ export default function Accountant({ stats, charts, transactions, currency }) {
                         data={charts.incomeVsExpense}
                         xKey="month"
                         unit={currency}
-                        series={[
-                            { key: 'income', color: '#D81B60' },
-                            { key: 'expenses', color: '#0288D1' },
-                        ]}
+                            series={[
+                                { key: 'income', color: BRAND.primary },
+                                { key: 'expenses', color: BRAND.secondary },
+                            ]}
                     />
                 </ChartCard>
 

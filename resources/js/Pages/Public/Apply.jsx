@@ -99,7 +99,7 @@ export default function Apply({ classes }) {
     return (
         <PublicLayout>
             {/* Page header */}
-            <section className="bg-gradient-to-br from-primary via-primary-600 to-rose-900 py-12 text-center text-white sm:py-16">
+            <section className="bg-gradient-to-br from-[#013157] via-[#01579B] to-[#0288D1] py-12 text-center text-white sm:py-16">
                 <div className="mx-auto max-w-3xl px-4">
                     <span className="badge bg-accent text-ink">
                         Admissions {school.admissions_year} Open

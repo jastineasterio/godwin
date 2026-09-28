@@ -27,19 +27,19 @@ const FALLBACK_SLIDES = [
         title: 'Welcome to God-Win Daycare & Nursery School',
         subtitle: 'Guiding Every Child in Goodness and Righteousness.',
         badge: 'Admission 2026 Open',
-        gradient: 'from-primary via-primary-600 to-rose-900',
+        gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
     },
     {
         title: 'Where Little Hearts Grow in God\u2019s Love',
         subtitle: 'Tunafundisha watoto kuanzia miaka 2-5 · Kisasani Medeli, Dodoma',
         badge: 'Ages 2 – 5 Years',
-        gradient: 'from-secondary via-sky-700 to-blue-900',
+        gradient: 'from-[#01579B] via-[#0288D1] to-[#039BE5]',
     },
     {
         title: 'Safe, Loving & Holistic Care Every Day',
         subtitle: 'Spiritual, physical, and educational development — in a safe environment.',
         badge: 'Daycare · Nursery · KG1 · KG2',
-        gradient: 'from-amber-500 via-accent-600 to-orange-700',
+        gradient: 'from-[#0288D1] via-[#039BE5] to-[#4FC3F7]',
     },
 ];
 
@@ -50,7 +50,7 @@ function HeroSlider({ banners }) {
             subtitle: b.subtitle ?? '',
             badge: b.cta_label ?? 'Admission Open',
             image: b.image_path,
-            gradient: 'from-primary via-primary-600 to-rose-900',
+            gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
         }))
         : FALLBACK_SLIDES;
 
@@ -127,7 +127,7 @@ function HeroSlider({ banners }) {
                     </Link>
                     <a
                         href="#programs"
-                        className="btn border-2 border-white/70 bg-white/10 px-7 py-3.5 text-base text-white backdrop-blur hover:bg-white/20"
+                        className="btn border-2 border-white/80 bg-transparent px-7 py-3.5 text-base text-white backdrop-blur hover:bg-white/10"
                     >
                         Learn More
                     </a>
@@ -382,7 +382,7 @@ function NewsSection({ news, events }) {
                                 <li key={event.id} className="flex items-start gap-3 rounded-xl bg-canvas p-3">
                                     <span
                                         className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-center text-white"
-                                        style={{ backgroundColor: event.color || '#0288D1' }}
+                                        style={{ backgroundColor: event.color || '#01579B' }}
                                     >
                                         <span className="text-[10px] font-extrabold leading-none">
                                             {new Date(event.start_date).getDate()}

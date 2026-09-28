@@ -3,6 +3,7 @@ import { BookOpen, CalendarCheck, ClipboardCheck, Clock, MapPin, Users } from 'l
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { ChartCard, TrendChart } from '../../Components/charts';
+import { BRAND } from '../../Components/ui';
 
 /* ===========================================================================
  * TEACHER DASHBOARD — assigned classes only (strict data isolation)
@@ -16,6 +17,7 @@ const QUICK_ACTIONS = [
 
 export default function Teacher({ stats, classes, schedule, charts, today }) {
     const statIcons = [Users, Users, ClipboardCheck, Clock];
+    const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
     const rollProgress = today.total ? Math.round((today.marked / today.total) * 100) : 0;
 
     return (
@@ -57,6 +59,8 @@ export default function Teacher({ stats, classes, schedule, charts, today }) {
                         label={stat.label}
                         value={stat.value}
                         accent={stat.accent}
+                        variant="filled"
+                        fill={statFills[i]}
                     />
                 ))}
             </div>
@@ -162,7 +166,7 @@ export default function Teacher({ stats, classes, schedule, charts, today }) {
                 className="mt-6"
                 delay={0.1}
             >
-                <TrendChart data={charts.weeklyTrend} xKey="day" yKey="rate" color="#0288D1" unit="%" />
+                <TrendChart data={charts.weeklyTrend} xKey="day" yKey="rate" color={BRAND.primary} unit="%" />
             </ChartCard>
         </DashboardLayout>
     );

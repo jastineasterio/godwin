@@ -35,12 +35,12 @@ function SidebarNav({ onNavigate }) {
                     return (
                         <div
                             key={`${item.label}-${i}`}
-                            className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400"
+                            className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/40"
                             title="Coming in the next release"
                         >
                             <Icon className="h-[18px] w-[18px] shrink-0" />
                             <span className="flex-1 truncate">{item.label}</span>
-                            <span className="badge bg-slate-100 text-slate-400">Soon</span>
+                            <span className="badge bg-white/10 text-white/60">Soon</span>
                         </div>
                     );
                 }
@@ -52,8 +52,8 @@ function SidebarNav({ onNavigate }) {
                         onClick={onNavigate}
                         className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
                             active
-                                ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                                : 'text-slate-600 hover:bg-primary/5 hover:text-primary'
+                                ? 'bg-[#0288D1] text-white border-l-4 border-white'
+                                : 'text-white/80 hover:bg-white/10 hover:text-white'
                         }`}
                     >
                         <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={2.2} />
@@ -68,13 +68,13 @@ function SidebarNav({ onNavigate }) {
 /** Brand block + close button used at the top of both sidebar variants. */
 function SidebarBrand({ onClose }) {
     return (
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
-            <Logo />
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+            <Logo dark />
             {onClose && (
                 <button
                     type="button"
                     onClick={onClose}
-                    className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500"
+                    className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-white"
                     aria-label="Close sidebar"
                 >
                     <X className="h-4 w-4" />
@@ -103,7 +103,7 @@ function DashboardHeader({ onOpenDrawer, collapsed, onToggleCollapse }) {
         .toUpperCase();
 
     return (
-        <header className="sticky top-0 z-30 border-b border-white/60 bg-white/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
             <div className="flex h-16 items-center gap-2 px-4 sm:px-6">
                 {/* Mobile drawer toggle */}
                 <button
@@ -254,20 +254,20 @@ export default function DashboardLayout({ children, title, subtitle }) {
             <motion.aside
                 animate={{ width: collapsed ? 76 : 264 }}
                 transition={{ type: 'tween', duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-200/70 bg-white lg:flex"
+                className="sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/10 bg-primary lg:flex"
             >
-                <div className={`border-b border-slate-100 px-4 py-4 ${collapsed ? 'flex justify-center px-0' : ''}`}>
+                <div className={`border-b border-white/10 px-4 py-4 ${collapsed ? 'flex justify-center px-0' : ''}`}>
                     {collapsed ? (
                         <button
                             type="button"
                             onClick={() => setCollapsed(false)}
-                            className="grid h-11 w-11 place-items-center rounded-2xl bg-primary font-display text-lg font-extrabold text-white shadow-lg shadow-primary/30"
+                            className="grid h-11 w-11 place-items-center rounded-2xl bg-secondary font-display text-lg font-extrabold text-white shadow-lg shadow-secondary/30"
                             aria-label="Expand sidebar"
                         >
                             G
                         </button>
                     ) : (
-                        <Logo />
+                        <Logo dark />
                     )}
                 </div>
 
@@ -278,11 +278,11 @@ export default function DashboardLayout({ children, title, subtitle }) {
                 )}
 
                 {!collapsed && (
-                    <div className="border-t border-slate-100 p-3">
+                    <div className="border-t border-white/10 p-3">
                         <button
                             type="button"
                             onClick={() => setCollapsed(true)}
-                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-slate-400 transition hover:bg-slate-50 hover:text-primary"
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/10 hover:text-white"
                         >
                             <PanelLeftClose className="h-4 w-4" />
                             Collapse menu
@@ -307,7 +307,7 @@ export default function DashboardLayout({ children, title, subtitle }) {
                             animate={{ x: 0 }}
                             exit={{ x: '-100%' }}
                             transition={{ type: 'tween', duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                            className="fixed inset-y-0 left-0 z-50 flex w-[82%] max-w-xs flex-col bg-white shadow-2xl lg:hidden"
+                            className="fixed inset-y-0 left-0 z-50 flex w-[82%] max-w-xs flex-col bg-primary shadow-2xl lg:hidden"
                         >
                             <SidebarBrand onClose={() => setDrawerOpen(false)} />
                             <SidebarNav onNavigate={() => setDrawerOpen(false)} />
@@ -374,7 +374,7 @@ function CollapsedNav() {
                         <div
                             key={`${item.label}-${i}`}
                             title={`${item.label} — coming soon`}
-                            className="grid h-10 w-full cursor-not-allowed place-items-center rounded-xl text-slate-300"
+                            className="grid h-10 w-full cursor-not-allowed place-items-center rounded-xl text-white/30"
                         >
                             <Icon className="h-[18px] w-[18px]" />
                         </div>
@@ -386,7 +386,7 @@ function CollapsedNav() {
                         key={item.label}
                         href={item.href}
                         title={item.label}
-                        className="grid h-10 w-full place-items-center rounded-xl text-slate-500 transition hover:bg-primary/5 hover:text-primary"
+                        className="grid h-10 w-full place-items-center rounded-xl text-white/80 transition hover:bg-white/10 hover:text-white"
                     >
                         <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
                     </a>

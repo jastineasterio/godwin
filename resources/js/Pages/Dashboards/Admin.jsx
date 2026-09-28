@@ -9,6 +9,7 @@ import {
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard, TrendChart } from '../../Components/charts';
+import { BRAND } from '../../Components/ui';
 
 /* ===========================================================================
  * ADMINISTRATOR DASHBOARD — system governance & website CMS
@@ -24,6 +25,7 @@ export default function Admin({
     pendingApplications,
 }) {
     const statIcons = [Users, Users, Users, Activity];
+    const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
     return (
         <DashboardLayout
@@ -40,6 +42,8 @@ export default function Admin({
                         label={stat.label}
                         value={stat.value}
                         accent={stat.accent}
+                        variant="filled"
+                        fill={statFills[i]}
                     />
                 ))}
             </div>
@@ -58,7 +62,8 @@ export default function Admin({
                         data={charts.userActivity}
                         xKey="role"
                         yKey="users"
-                        color="#0288D1"
+                        color={BRAND.primary}
+                        unit=""
                     />
                 </ChartCard>
             </div>

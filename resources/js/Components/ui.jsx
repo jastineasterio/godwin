@@ -7,8 +7,8 @@ import { usePage } from '@inertiajs/react';
  * ======================================================================== */
 
 export const BRAND = {
-    primary: '#D81B60',
-    secondary: '#0288D1',
+    primary: '#01579B',
+    secondary: '#1E88E5',
     accent: '#FBC02D',
     canvas: '#F8F9FA',
     ink: '#1E293B',
@@ -38,8 +38,37 @@ const ACCENTS = {
     accent: { ring: 'bg-accent/20 text-amber-600', bar: 'bg-accent' },
 };
 
-export function StatCard({ icon: Icon, label, value, accent = 'primary', hint, index = 0 }) {
+export function StatCard({ icon: Icon, label, value, accent = 'primary', hint, index = 0, variant = 'default', fill }) {
     const palette = ACCENTS[accent] ?? ACCENTS.primary;
+
+    if (variant === 'filled') {
+        const bgColor = fill || 'bg-primary';
+        return (
+            <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.07, duration: 0.35, ease: 'easeOut' }}
+                className={`rounded-2xl p-5 text-white shadow-lg ${bgColor}`}
+            >
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="truncate text-xs font-bold uppercase tracking-wider text-white/80">
+                            {label}
+                        </p>
+                        <p className="mt-1.5 truncate font-display text-2xl font-bold sm:text-3xl">
+                            {value}
+                        </p>
+                        {hint && <p className="mt-1 text-xs text-white/80">{hint}</p>}
+                    </div>
+                    {Icon && (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/20">
+                            <Icon className="h-5 w-5 stroke-[2.2]" />
+                        </span>
+                    )}
+                </div>
+            </motion.div>
+        );
+    }
 
     return (
         <motion.div

@@ -2,6 +2,7 @@ import { Baby, CalendarDays, GraduationCap, Percent, Users } from 'lucide-react'
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard } from '../../Components/charts';
+import { BRAND } from '../../Components/ui';
 
 /* ===========================================================================
  * HEAD OF SCHOOL DASHBOARD — daily operational & academic leadership
@@ -9,6 +10,7 @@ import { BarChartCard, ChartCard } from '../../Components/charts';
 
 export default function HeadOfSchool({ stats, charts, classes }) {
     const statIcons = [GraduationCap, Users, Baby, Percent];
+    const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
     // Simple agenda: the largest classes to supervise first
     const schedule = [...(classes ?? [])]
@@ -30,6 +32,8 @@ export default function HeadOfSchool({ stats, charts, classes }) {
                         label={stat.label}
                         value={stat.value}
                         accent={stat.accent}
+                        variant="filled"
+                        fill={statFills[i]}
                     />
                 ))}
             </div>
@@ -45,7 +49,7 @@ export default function HeadOfSchool({ stats, charts, classes }) {
                         data={charts.classAttendance}
                         xKey="class"
                         yKey="rate"
-                        color="#D81B60"
+                        color={BRAND.primary}
                         unit="%"
                     />
                 </ChartCard>

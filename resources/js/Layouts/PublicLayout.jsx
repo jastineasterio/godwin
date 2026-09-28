@@ -40,7 +40,7 @@ export default function PublicLayout({ children }) {
     return (
         <div className="flex min-h-screen flex-col bg-canvas">
             {/* ================= Announcement / quick contact bar ============ */}
-            <div className="bg-ink text-white">
+            <div className="bg-primary text-white">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs font-semibold sm:px-6">
                     <div className="flex items-center gap-3">
                         <span className="hidden items-center gap-1.5 text-accent sm:flex">
@@ -91,7 +91,7 @@ export default function PublicLayout({ children }) {
                         >
                             {auth.user ? 'My Dashboard' : 'Staff Login'}
                         </Link>
-                        <Link href={routes.apply} className="btn-primary hidden sm:inline-flex">
+                        <Link href={routes.apply} className="btn-accent hidden sm:inline-flex">
                             Apply Now
                         </Link>
 
@@ -157,7 +157,7 @@ export default function PublicLayout({ children }) {
                                 <Link
                                     href={routes.apply}
                                     onClick={() => setDrawerOpen(false)}
-                                    className="btn-primary w-full"
+                                    className="btn-accent w-full"
                                 >
                                     Apply Now
                                 </Link>

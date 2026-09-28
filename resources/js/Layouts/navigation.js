@@ -1,4 +1,4 @@
-﻿import {
+import {
     Baby,
     Banknote,
     BarChart3,

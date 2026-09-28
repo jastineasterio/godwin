@@ -17,6 +17,6 @@ createInertiaApp({
     },
 
     progress: {
-        color: '#D81B60', // brand primary — Inertia page-load progress bar
+        color: '#01579B', // brand primary — Inertia page-load progress bar
     },
 });
