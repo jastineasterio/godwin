@@ -10,6 +10,7 @@ use App\Models\Attendance;
 use App\Models\BehaviorNote;
 use App\Models\Student;
 use App\Models\Term;
+use App\Services\GradingScale;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -140,15 +141,8 @@ class ReportCardController extends Controller
         abort(403, 'You are not allowed to view this report.');
     }
 
-    /** Grading bands printed on the report. */
+    /** Grading bands printed on the report — single source of truth: App\Services\GradingScale. */
     protected function grade(float $percentage): string
     {
-        return match (true) {
-            $percentage >= 90 => 'A — Excellent',
-            $percentage >= 75 => 'B — Very Good',
-            $percentage >= 60 => 'C — Good',
-            $percentage >= 50 => 'D — Satisfactory',
-            default => 'E — Needs Support',
-        };
-    }
-}
+        return GradingScale::grade($percentage);
+    }}

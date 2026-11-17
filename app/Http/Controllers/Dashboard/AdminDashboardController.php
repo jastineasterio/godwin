@@ -7,7 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Models\AuditLog;
 use App\Models\SchoolApplication;
+use App\Models\SchoolEvent;
 use App\Models\Student;
+use App\Models\Timetable;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -74,6 +76,26 @@ class AdminDashboardController extends Controller
         $recentNews = Announcement::latest()->take(5)
             ->get(['id', 'title', 'type', 'is_published', 'created_at']);
 
+        $upcomingEvents = SchoolEvent::published()
+            ->upcoming()
+            ->latest('start_date')
+            ->take(5)
+            ->get(['id', 'title', 'start_date', 'end_date', 'location', 'color', 'audience']);
+
+        $todayTimetable = Timetable::with(['schoolClass:id,name,code', 'subject:id,name,code', 'teacher:id,name'])
+            ->orderBy('start_time')
+            ->get(['id', 'class_id', 'subject_id', 'teacher_id', 'day', 'start_time', 'end_time', 'room'])
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'class_name' => $t->schoolClass?->name ?? '—',
+                'subject_name' => $t->subject?->name ?? '—',
+                'teacher_name' => $t->teacher?->name ?? '—',
+                'day' => $t->day,
+                'start_time' => $t->start_time,
+                'end_time' => $t->end_time,
+                'room' => $t->room,
+            ]);
+
         return Inertia::render('Dashboards/Admin', [
             'stats' => [
                 ['label' => 'Total Students', 'value' => $totalStudents, 'accent' => 'primary'],
@@ -90,6 +112,8 @@ class AdminDashboardController extends Controller
             'recentLogs' => $recentLogs,
             'recentNews' => $recentNews,
             'pendingApplications' => $pendingApplications,
+            'upcomingEvents' => $upcomingEvents,
+            'todayTimetable' => $todayTimetable,
         ]);
     }
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import { Banknote as BanknoteIcon, FileText, Receipt, RotateCcw } from 'lucide-react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
-import { Card, EmptyState, ProgressBar, StatCard } from '../../Components/ui';
+import { Badge, Card, EmptyState, ProgressBar, StatCard } from '../../Components/ui';
 import { Modal } from '../../Components/modal';
 import { Field, Select, TextInput, Textarea } from '../../Components/form';
 import { PageHeader } from '../../Components/page';

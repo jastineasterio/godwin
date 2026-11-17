@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Enums\TimetableDay;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\SchoolEvent;
 use App\Models\Student;
 use App\Models\Timetable;
 use Illuminate\Http\Request;
@@ -80,6 +81,12 @@ class TeacherDashboardController extends Controller
             ->where('status', 'active')
             ->count();
 
+        $upcomingEvents = SchoolEvent::published()
+            ->upcoming()
+            ->latest('start_date')
+            ->take(5)
+            ->get(['id', 'title', 'start_date', 'end_date', 'location', 'color', 'audience']);
+
         return Inertia::render('Dashboards/Teacher', [
             'stats' => [
                 ['label' => 'My Classes', 'value' => $myClasses->count(), 'accent' => 'primary'],
@@ -95,6 +102,7 @@ class TeacherDashboardController extends Controller
                 'marked' => $markedToday,
                 'total' => $studentTotal,
             ],
+            'upcomingEvents' => $upcomingEvents,
         ]);
     }
 }

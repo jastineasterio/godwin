@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { BookOpen, CalendarCheck, ClipboardCheck, Clock, MapPin, Users } from 'lucide-react';
+import { BookOpen, CalendarCheck, CalendarDays, ClipboardCheck, Clock, MapPin, Users } from 'lucide-react';
+import { Link } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { ChartCard, TrendChart } from '../../Components/charts';
@@ -15,7 +16,7 @@ const QUICK_ACTIONS = [
     { label: 'Assign Homework', icon: CalendarCheck, tone: 'bg-accent', hint: 'Post to the class' },
 ];
 
-export default function Teacher({ stats, classes, schedule, charts, today }) {
+export default function Teacher({ stats, classes, schedule, charts, today, upcomingEvents }) {
     const statIcons = [Users, Users, ClipboardCheck, Clock];
     const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
     const rollProgress = today.total ? Math.round((today.marked / today.total) * 100) : 0;
@@ -156,6 +157,33 @@ export default function Teacher({ stats, classes, schedule, charts, today }) {
                             </li>
                         )}
                     </ol>
+                </Card>
+
+                {/* Upcoming Events */}
+                <Card
+                    title="Upcoming Events"
+                    subtitle="School calendar"
+                    className="xl:col-span-5"
+                    delay={0.15}
+                    action={<Link href="/events" className="text-xs font-bold text-primary hover:underline">View all</Link>}
+                >
+                    <ul className="space-y-2.5">
+                        {upcomingEvents?.length ? (
+                            upcomingEvents.map((ev) => (
+                                <li key={ev.id} className="flex items-center justify-between gap-2 rounded-xl bg-canvas px-3 py-2.5">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-bold text-ink">{ev.title}</p>
+                                        <p className="truncate text-xs text-slate-500">
+                                            {ev.start_date}{ev.location ? ` · ${ev.location}` : ''}
+                                        </p>
+                                    </div>
+                                    <Badge tone={ev.color ? 'accent' : 'muted'}>{ev.start_date}</Badge>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="rounded-xl bg-canvas p-4 text-center text-sm text-slate-500">No upcoming events.</li>
+                        )}
+                    </ul>
                 </Card>
             </div>
 

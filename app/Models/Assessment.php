@@ -22,6 +22,8 @@ class Assessment extends Model
         'class_id',
         'subject_id',
         'term_id',
+        'examination_id',
+        'status',
         'title',
         'type',
         'score',
@@ -39,6 +41,7 @@ class Assessment extends Model
             'score' => 'decimal:2',
             'max_score' => 'decimal:2',
             'obtained_at' => 'date',
+            'status' => 'string',
         ];
     }
 
@@ -84,6 +87,12 @@ class Assessment extends Model
         return $this->belongsTo(User::class, 'recorded_by');
     }
 
+    /** Examination this result belongs to (NULL for non-exam assessments). */
+    public function examination(): BelongsTo
+    {
+        return $this->belongsTo(Examination::class);
+    }
+
     /* ---------------------------------------------------------------------- */
     /* Query scopes */
     /* ---------------------------------------------------------------------- */
@@ -107,5 +116,23 @@ class Assessment extends Model
     public function scopePassing(Builder $query, float $threshold = 50): Builder
     {
         return $query->whereRaw('score / NULLIF(max_score, 0) * 100 >= ?', [$threshold]);
+    }
+
+    /** Results linked to a specific examination. */
+    public function scopeForExamination(Builder $query, int $examinationId): Builder
+    {
+        return $query->where('examination_id', $examinationId);
+    }
+
+    /** Results by submission status. */
+    public function scopeByStatus(Builder $query, string $status): Builder
+    {
+        return $query->where('status', $status);
+    }
+
+    /** Examination results only (excludes standalone assessments). */
+    public function scopeExaminationResults(Builder $query): Builder
+    {
+        return $query->whereNotNull('examination_id');
     }
 }

@@ -183,6 +183,11 @@ class Student extends Model
         return $query->where('class_id', $classId);
     }
 
+    public function scopeInClassIds(Builder $query, array $classIds): Builder
+    {
+        return $query->whereIn('class_id', $classIds);
+    }
+
     /** Free-text search across names / registration number. */
     public function scopeSearch(Builder $query, ?string $term): Builder
     {

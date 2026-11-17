@@ -69,8 +69,18 @@ class AssessmentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
-        $data['recorded_by'] = $request->user()->id;
-        $data['class_id'] ??= Student::findOrFail($data['student_id'])->class_id;
+        $user = $request->user();
+
+        $student = Student::findOrFail($data['student_id']);
+        $data['class_id'] = $student->class_id;
+
+        abort_unless(
+            in_array($data['class_id'], $this->allowedClassIds($user), true),
+            403,
+            'You are not assigned to this class.'
+        );
+
+        $data['recorded_by'] = $user->id;
 
         $assessment = Assessment::create($data);
 
@@ -102,12 +112,42 @@ class AssessmentController extends Controller
 
     public function update(Request $request, Assessment $assessment): RedirectResponse
     {
+        $user = $request->user();
+
         abort_unless(
-            in_array($assessment->class_id, $this->allowedClassIds($request->user()), true),
-            403
+            in_array($assessment->class_id, $this->allowedClassIds($user), true),
+            403,
+            'You are not assigned to this class.'
         );
 
-        $assessment->update($this->validated($request));
+        if ($assessment->status === 'approved') {
+            abort(403, 'Approved results cannot be modified. Return the result for correction first.');
+        }
+
+        if ($assessment->examination_id && $assessment->examination->status === 'closed') {
+            abort(403, 'Results for a closed examination cannot be modified.');
+        }
+
+        $data = $this->validated($request);
+
+        if (isset($data['class_id']) && ! in_array($data['class_id'], $this->allowedClassIds($user), true)) {
+            abort(403, 'You are not assigned to that class.');
+        }
+
+        if ($assessment->examination_id) {
+            unset($data['student_id'], $data['class_id'], $data['subject_id'], $data['term_id']);
+        } elseif (isset($data['student_id'])) {
+            $newStudent = Student::find($data['student_id']);
+            abort_unless(
+                $newStudent && in_array($newStudent->class_id, $this->allowedClassIds($user), true),
+                403,
+                'You are not assigned to that student\'s class.'
+            );
+        }
+
+        $assessment->update($data);
+
+        AuditLog::record($user, 'assessment.updated', "Updated \"{$assessment->title}\"", $assessment);
 
         return redirect()->route('assessments.index')->with('success', 'Assessment updated.');
     }

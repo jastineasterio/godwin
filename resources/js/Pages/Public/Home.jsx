@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Link, usePage } from '@inertiajs/react';
 import {
     ArrowRight,
@@ -19,69 +19,89 @@ import PublicLayout from '../../Layouts/PublicLayout';
 import { SectionHeading } from '../../Components/ui';
 
 /* ===========================================================================
- * Hero slider — auto-rotating brand banners with CTA buttons
+ * Hero slider — full-bleed poster images managed via admin CMS
+ *
+ * Behaviour:
+ *   0 posters → static default hero with CTA (no broken image, no errors)
+ *   1 poster  → static display (no auto-rotation)
+ *   2–4 posters → auto-rotate every 3 seconds with smooth cross-fade
  * ======================================================================== */
 
-const FALLBACK_SLIDES = [
-    {
-        title: 'Welcome to God-Win Daycare & Nursery School',
-        subtitle: 'Guiding Every Child in Goodness and Righteousness.',
-        badge: 'Admission 2026 Open',
-        gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
-    },
-    {
-        title: 'Where Little Hearts Grow in God\u2019s Love',
-        subtitle: 'Tunafundisha watoto kuanzia miaka 2-5 · Kisasani Medeli, Dodoma',
-        badge: 'Ages 2 – 5 Years',
-        gradient: 'from-[#01579B] via-[#0288D1] to-[#039BE5]',
-    },
-    {
-        title: 'Safe, Loving & Holistic Care Every Day',
-        subtitle: 'Spiritual, physical, and educational development — in a safe environment.',
-        badge: 'Daycare · Nursery · KG1 · KG2',
-        gradient: 'from-[#0288D1] via-[#039BE5] to-[#4FC3F7]',
-    },
-];
+const DEFAULT_HERO = {
+    title: 'Welcome to God-Win Daycare & Nursery School',
+    subtitle: 'Guiding Every Child in Goodness and Righteousness.',
+    badge: 'Admission 2026 Open',
+    gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
+};
 
 function HeroSlider({ banners }) {
-    const slides = banners?.length
+    const hasBanners = banners && banners.length > 0;
+
+    const slides = hasBanners
         ? banners.map((b) => ({
-            title: b.title,
-            subtitle: b.subtitle ?? '',
-            badge: b.cta_label ?? 'Admission Open',
-            image: b.image_path,
-            gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
-        }))
-        : FALLBACK_SLIDES;
+              id: b.id,
+              title: b.title,
+              subtitle: b.subtitle ?? '',
+              badge: b.cta_label ?? 'Admission Open',
+              image: b.image_path,
+              link: b.link,
+              gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
+          }))
+        : [{ ...DEFAULT_HERO, isDefault: true }];
 
     const [index, setIndex] = useState(0);
-    const timer = useRef(null);
+    const [imgLoaded, setImgLoaded] = useState(false);
+    const [imgError, setImgError] = useState(false);
+    const timerRef = useRef(null);
+    const currentSlide = slides[index];
+    const shouldRotate = hasBanners && slides.length > 1;
 
     useEffect(() => {
-        timer.current = setInterval(() => setIndex((i) => (i + 1) % slides.length), 6000);
+        setImgLoaded(false);
+        setImgError(false);
 
-        return () => clearInterval(timer.current);
-    }, [slides.length]);
+        if (timerRef.current) clearInterval(timerRef.current);
 
-    const slide = slides[index];
+        if (shouldRotate) {
+            timerRef.current = setInterval(() => {
+                setIndex((i) => (i + 1) % slides.length);
+            }, 9000);
+        }
+
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [slides.length, shouldRotate]);
+
+    const showImage = !currentSlide.isDefault && currentSlide.image && !imgError;
+    const bgGradient = `bg-gradient-to-br ${currentSlide.gradient}`;
 
     return (
-        <section className="relative isolate overflow-hidden">
-            <AnimatePresence mode="wait">
-                <motion.div
-                    key={index}
-                    initial={{ opacity: 0, scale: 1.04 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.7, ease: 'easeOut' }}
-                    className={`absolute inset-0 bg-gradient-to-br ${slide.gradient}`}
-                >
-                    {slide.image && <img src={slide.image} alt="" className="h-full w-full object-cover opacity-30" />}
+        <section className={`relative isolate overflow-hidden ${bgGradient}`}>
+            {/* ---- Background image layer (cross-faded) ---- */}
+            {showImage && (
+                <img
+                    key={currentSlide.id ?? currentSlide.image}
+                    src={currentSlide.image}
+                    alt=""
+                    onLoad={() => setImgLoaded(true)}
+                    onError={() => setImgError(true)}
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+                        imgLoaded ? 'opacity-40' : 'opacity-0'
+                    }`}
+                />
+            )}
+
+            {/* Fallback decorative blobs when no poster image is shown */}
+            {!showImage && (
+                <>
                     <span className="absolute -left-20 top-10 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
                     <span className="absolute -right-16 bottom-0 h-72 w-72 rounded-full bg-accent/20 blur-2xl" />
-                </motion.div>
-            </AnimatePresence>
+                </>
+            )}
 
+            {/* ---- Content overlay ---- */}
             <div className="relative mx-auto flex min-h-[440px] max-w-7xl flex-col items-center justify-center px-4 py-20 text-center text-white sm:min-h-[520px] sm:px-6 lg:min-h-[600px]">
                 <motion.span
                     key={`badge-${index}`}
@@ -91,7 +111,7 @@ function HeroSlider({ banners }) {
                     className="badge bg-accent text-ink shadow-lg"
                 >
                     <Sparkles className="h-3.5 w-3.5" />
-                    {slide.badge}
+                    {currentSlide.badge}
                 </motion.span>
 
                 <motion.h1
@@ -101,51 +121,65 @@ function HeroSlider({ banners }) {
                     transition={{ delay: 0.2, duration: 0.5 }}
                     className="mt-5 max-w-4xl text-balance font-display text-3xl font-extrabold leading-tight drop-shadow-sm sm:text-5xl lg:text-6xl"
                 >
-                    {slide.title}
+                    {currentSlide.title}
                 </motion.h1>
 
-                <motion.p
-                    key={`sub-${index}`}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.32, duration: 0.5 }}
-                    className="mt-4 max-w-2xl text-balance text-sm font-medium text-white/90 sm:text-lg"
-                >
-                    {slide.subtitle}
-                </motion.p>
-
-                <motion.div
-                    key={`cta-${index}`}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.44, duration: 0.5 }}
-                    className="mt-8 flex flex-col gap-3 sm:flex-row"
-                >
-                    <Link href="/apply" className="btn-accent px-7 py-3.5 text-base shadow-xl">
-                        Apply for Admission 2026
-                        <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <a
-                        href="#programs"
-                        className="btn border-2 border-white/80 bg-transparent px-7 py-3.5 text-base text-white backdrop-blur hover:bg-white/10"
+                {currentSlide.subtitle && (
+                    <motion.p
+                        key={`sub-${index}`}
+                        initial={{ opacity: 0, y: 18 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.32, duration: 0.5 }}
+                        className="mt-4 max-w-2xl text-balance text-sm font-medium text-white/90 sm:text-lg"
                     >
-                        Learn More
-                    </a>
-                </motion.div>
+                        {currentSlide.subtitle}
+                    </motion.p>
+                )}
 
-                <div className="mt-10 flex gap-2">
-                    {slides.map((_, i) => (
-                        <button
-                            key={i}
-                            type="button"
-                            onClick={() => setIndex(i)}
-                            aria-label={`Go to slide ${i + 1}`}
-                            className={`h-2 rounded-full transition-all duration-300 ${
-                                i === index ? 'w-8 bg-accent' : 'w-2 bg-white/50 hover:bg-white/80'
-                            }`}
-                        />
-                    ))}
-                </div>
+                {(currentSlide.link || currentSlide.isDefault) && (
+                    <motion.div
+                        key={`cta-${index}`}
+                        initial={{ opacity: 0, y: 18 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.44, duration: 0.5 }}
+                        className="mt-8 flex flex-col gap-3 sm:flex-row"
+                    >
+                        <Link
+                            href={currentSlide.link || '/apply'}
+                            className="btn-accent px-7 py-3.5 text-base shadow-xl"
+                        >
+                            {currentSlide.isDefault
+                                ? 'Apply for Admission 2026'
+                                : currentSlide.cta_label || 'Learn More'}
+                            <ArrowRight className="h-4 w-4" />
+                        </Link>
+                        {currentSlide.isDefault && (
+                            <a
+                                href="#programs"
+                                className="btn border-2 border-white/80 bg-transparent px-7 py-3.5 text-base text-white backdrop-blur hover:bg-white/10"
+                            >
+                                Learn More
+                            </a>
+                        )}
+                    </motion.div>
+                )}
+
+                {/* ---- Pagination dots ---- */}
+                {shouldRotate && (
+                    <div className="mt-10 flex gap-2">
+                        {slides.map((_, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => setIndex(i)}
+                                aria-label={`Go to slide ${i + 1}`}
+                                className={`h-2 rounded-full transition-all duration-300 ${
+                                    i === index ? 'w-8 bg-accent' : 'w-2 bg-white/50 hover:bg-white/80'
+                                }`}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
         </section>
     );

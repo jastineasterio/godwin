@@ -241,3 +241,112 @@ export function ProgressBar({ value = 0, color = 'bg-primary', label }) {
         </div>
     );
 }
+
+/* ===========================================================================
+ * Button component
+ * ======================================================================== */
+
+export function Button({
+    children,
+    className = '',
+    disabled = false,
+    variant = 'default',
+    size = 'default',
+    onClick,
+    type = 'button',
+}) {
+    const base = 'inline-flex items-center justify-center rounded-xl font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+
+    const variants = {
+        default: 'bg-primary text-white hover:bg-primary/90 focus:ring-primary',
+        outline: 'border border-slate-200 bg-transparent hover:bg-slate-100 text-ink focus:ring-primary',
+        secondary: 'bg-slate-100 text-ink hover:bg-slate-200 focus:ring-slate-300',
+    };
+
+    const sizes = {
+        default: 'h-10 px-4 py-2 text-sm',
+        sm: 'h-8 px-3 text-xs',
+    };
+
+    return (
+        <button
+            type={type}
+            disabled={disabled}
+            onClick={onClick}
+            className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+        >
+            {children}
+        </button>
+    );
+}
+
+/* ===========================================================================
+ * Input component
+ * ======================================================================== */
+
+export function Input({ className = '', ...props }) {
+    return (
+        <input
+            {...props}
+            className={`block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        />
+    );
+}
+
+/* ===========================================================================
+ * Label component
+ * ======================================================================== */
+
+export function Label({ children, className = '' }) {
+    return (
+        <label className={`block text-sm font-medium text-slate-700 mb-1 ${className}`}>
+            {children}
+        </label>
+    );
+}
+
+/* ===========================================================================
+ * Select component
+ * ======================================================================== */
+
+export function Select({ className = '', ...props }) {
+    return (
+        <select
+            {...props}
+            className={`block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        />
+    );
+}
+
+/* ===========================================================================
+ * Textarea component
+ * ======================================================================== */
+
+export function Textarea({ className = '', ...props }) {
+    return (
+        <textarea
+            {...props}
+            className={`block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        />
+    );
+}
+
+/* ===========================================================================
+ * Switch component
+ * ======================================================================== */
+
+export function Switch({ checked = false, onCheckedChange, className = '' }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            onClick={() => onCheckedChange(!checked)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${checked ? 'bg-primary border-primary' : 'bg-slate-200 border-slate-300'} ${className}`}
+        >
+            <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`}
+            />
+        </button>
+    );
+}

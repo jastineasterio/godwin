@@ -50,6 +50,8 @@ class HandleInertiaRequests extends Middleware
                 'apply' => url('/apply'),
                 'dashboard' => url('/dashboard'),
                 'contact' => url('/contact'),
+                'users' => url('/users'),
+                'settings' => url('/settings'),
             ],
         ];
     }

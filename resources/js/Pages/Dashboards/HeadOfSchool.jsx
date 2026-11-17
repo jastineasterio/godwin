@@ -1,4 +1,5 @@
 import { Baby, CalendarDays, GraduationCap, Percent, Users } from 'lucide-react';
+import { Link } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard } from '../../Components/charts';
@@ -8,7 +9,7 @@ import { BRAND } from '../../Components/ui';
  * HEAD OF SCHOOL DASHBOARD — daily operational & academic leadership
  * ======================================================================== */
 
-export default function HeadOfSchool({ stats, charts, classes }) {
+export default function HeadOfSchool({ stats, charts, classes, upcomingEvents, todayTimetable }) {
     const statIcons = [GraduationCap, Users, Baby, Percent];
     const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
@@ -85,6 +86,58 @@ export default function HeadOfSchool({ stats, charts, classes }) {
                                 </div>
                             </li>
                         ))}
+                    </ul>
+                </Card>
+
+                {/* Upcoming Events */}
+                <Card
+                    title="Upcoming Events"
+                    subtitle="School calendar"
+                    delay={0.15}
+                    action={<Link href="/events" className="text-xs font-bold text-primary hover:underline">View all</Link>}
+                >
+                    <ul className="space-y-2.5">
+                        {upcomingEvents?.length ? (
+                            upcomingEvents.map((ev) => (
+                                <li key={ev.id} className="flex items-center justify-between gap-2 rounded-xl bg-canvas px-3 py-2.5">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-bold text-ink">{ev.title}</p>
+                                        <p className="truncate text-xs text-slate-500">
+                                            {ev.start_date}{ev.location ? ` · ${ev.location}` : ''}
+                                        </p>
+                                    </div>
+                                    <Badge tone={ev.color ? 'accent' : 'muted'}>{ev.start_date}</Badge>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="rounded-xl bg-canvas p-4 text-center text-sm text-slate-500">No upcoming events.</li>
+                        )}
+                    </ul>
+                </Card>
+
+                {/* Today's Timetable */}
+                <Card
+                    title="Today's Timetable"
+                    subtitle="All scheduled lessons"
+                    delay={0.2}
+                    action={<Link href="/timetable" className="text-xs font-bold text-primary hover:underline">View all</Link>}
+                >
+                    <ul className="divide-y divide-slate-100">
+                        {todayTimetable?.length ? (
+                            todayTimetable.map((slot) => (
+                                <li key={slot.id} className="flex items-center justify-between gap-2 py-2.5">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-bold text-ink">{slot.subject_name}</p>
+                                        <p className="truncate text-xs text-slate-500">{slot.class_name} · {slot.teacher_name}</p>
+                                    </div>
+                                    <span className="shrink-0 text-xs font-semibold text-slate-500">
+                                        {slot.start_time && slot.end_time ? `${slot.start_time} – ${slot.end_time}` : slot.day}
+                                    </span>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="py-4 text-center text-sm text-slate-500">No lessons scheduled today.</li>
+                        )}
                     </ul>
                 </Card>
             </div>

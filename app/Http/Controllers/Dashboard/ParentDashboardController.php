@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\Attendance;
+use App\Models\SchoolEvent;
 use App\Models\Student;
+use App\Models\Timetable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -102,6 +104,29 @@ class ParentDashboardController extends Controller
             - (float) $child->invoices()->outstanding()->sum('amount_paid');
         $outstanding = max(0, $outstanding);
 
+        $childTimetable = $child->class_id
+            ? Timetable::where('class_id', $child->class_id)
+                ->with(['subject:id,name,code', 'teacher:id,name'])
+                ->orderBy('day')
+                ->orderBy('start_time')
+                ->get(['id', 'subject_id', 'teacher_id', 'day', 'start_time', 'end_time', 'room'])
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'subject_name' => $t->subject?->name ?? '—',
+                    'teacher_name' => $t->teacher?->name ?? '—',
+                    'day' => $t->day,
+                    'start_time' => $t->start_time,
+                    'end_time' => $t->end_time,
+                    'room' => $t->room,
+                ])
+            : collect();
+
+        $upcomingEvents = SchoolEvent::published()
+            ->upcoming()
+            ->latest('start_date')
+            ->take(5)
+            ->get(['id', 'title', 'start_date', 'end_date', 'location', 'color', 'audience']);
+
         return Inertia::render('Dashboards/Parent', [
             'children' => $children,
             'activeChildId' => $child->id,
@@ -134,6 +159,8 @@ class ParentDashboardController extends Controller
                 'subjectGrades' => $subjectGrades,
             ],
             'invoices' => $invoices,
+            'childTimetable' => $childTimetable,
+            'upcomingEvents' => $upcomingEvents,
         ]);
     }
 }

@@ -5,6 +5,7 @@ import {
     Bell,
     BookOpen,
     CalendarCheck2,
+    CalendarDays,
     FileText,
     Percent,
     Users,
@@ -13,6 +14,7 @@ import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard, DonutChart } from '../../Components/charts';
 import { BRAND } from '../../Components/ui';
+import { Link } from '@inertiajs/react';
 
 /* ===========================================================================
  * PARENT PORTAL — multi-child selector
@@ -42,7 +44,7 @@ const initials = (name = '') =>
         .slice(0, 2)
         .join('');
 
-export default function Parent({ children, activeChildId, stats, profile, charts, invoices }) {
+export default function Parent({ children, activeChildId, stats, profile, charts, invoices, childTimetable, upcomingEvents }) {
     const statIcons = [Percent, Users, CalendarCheck2, Banknote];
     const statFills = ['bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
@@ -270,6 +272,72 @@ export default function Parent({ children, activeChildId, stats, profile, charts
                     </ul>
                 </Card>
             </div>
+
+            {/* ---------- Child's Timetable ---------------------------------- */}
+            {childTimetable?.length > 0 && (
+                <Card
+                    title="Child's Timetable"
+                    subtitle={`Weekly schedule for ${profile.name}`}
+                    className="mt-6"
+                    delay={0.1}
+                    action={<Link href="/timetable" className="text-xs font-bold text-primary hover:underline">Full timetable</Link>}
+                >
+                    <div className="overflow-x-auto">
+                        <div className="grid grid-cols-5 min-w-[600px]">
+                            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day, idx) => {
+                                const daySlots = childTimetable.filter((s) => s.day === day);
+                                return (
+                                    <div key={day} className={`${idx > 0 ? 'border-l border-slate-100' : ''}`}>
+                                        <div className="border-b border-slate-100 pb-2 text-center">
+                                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                                {day.slice(0, 3)}
+                                            </span>
+                                        </div>
+                                        <div className="p-1.5 space-y-1.5 min-h-[80px]">
+                                            {daySlots.map((slot) => (
+                                                <div key={slot.id} className="rounded-lg bg-canvas p-2">
+                                                    <p className="truncate text-xs font-bold text-ink">{slot.subject_name}</p>
+                                                    <p className="text-[10px] text-slate-500">
+                                                        {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
+                                                    </p>
+                                                    {slot.teacher_name && (
+                                                        <p className="text-[10px] text-slate-400">{slot.teacher_name}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* ---------- Upcoming Events ------------------------------------ */}
+            {upcomingEvents?.length > 0 && (
+                <Card
+                    title="Upcoming School Events"
+                    subtitle="What's coming up"
+                    className="mt-6"
+                    delay={0.15}
+                    action={<Link href="/events" className="text-xs font-bold text-primary hover:underline">View all</Link>}
+                >
+                    <ul className="space-y-2.5">
+                        {upcomingEvents.map((ev) => (
+                            <li key={ev.id} className="flex items-center justify-between gap-2 rounded-xl bg-canvas px-4 py-3">
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-ink">{ev.title}</p>
+                                    <p className="truncate text-xs text-slate-500">
+                                        {ev.start_date}{ev.location ? ` · ${ev.location}` : ''}
+                                    </p>
+                                </div>
+                                <Badge tone={ev.color ? 'accent' : 'muted'}>{ev.start_date}</Badge>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
         </DashboardLayout>
     );
 }

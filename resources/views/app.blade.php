@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="God-Win Daycare & Nursery School — Guiding Every Child in Goodness and Righteousness. Kisasani Medeli, Dodoma.">
+    <meta name="description" content="God-Win Daycare & Nursery School â€” Guiding Every Child in Goodness and Righteousness. Kisasani Medeli, Dodoma.">
 
     <title>{{ $title ?? 'God-Win Daycare & Nursery School' }}</title>
 
@@ -12,6 +12,7 @@
     <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700,800|baloo-2:600,700,800" rel="stylesheet">
 
     @if (file_exists(public_path('build/manifest.json')))
+        @viteReactRefresh
         @vite(['resources/js/app.jsx'])
     @else
         {{-- Production assets have not been compiled yet (npm run build).
@@ -33,10 +34,11 @@
 <body class="font-sans antialiased">
     @unless (file_exists(public_path('build/manifest.json')))
         <div class="build-banner">
-            Frontend assets are not compiled yet — run <code>npm install &amp;&amp; npm run build</code> (or <code>npm run dev</code>).
+            Frontend assets are not compiled yet â€” run <code>npm install &amp;&amp; npm run build</code> (or <code>npm run dev</code>).
         </div>
     @endunless
 
     @inertia
 </body>
 </html>
+

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Announcement;
 use App\Models\Banner;
 use App\Models\SchoolEvent;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,10 +17,20 @@ class HomeController extends Controller
 {
     public function index(): Response
     {
+        $banners = Banner::query()
+            ->active()
+            ->get(['id', 'title', 'subtitle', 'image_path', 'link', 'cta_label'])
+            ->map(fn (Banner $b) => [
+                'id' => $b->id,
+                'title' => $b->title,
+                'subtitle' => $b->subtitle,
+                'image_path' => $this->resolveImagePath($b->image_path),
+                'link' => $b->link,
+                'cta_label' => $b->cta_label,
+            ]);
+
         return Inertia::render('Public/Home', [
-            'banners' => Banner::query()
-                ->active()
-                ->get(['id', 'title', 'subtitle', 'image_path', 'link', 'cta_label']),
+            'banners' => $banners,
 
             'news' => Announcement::query()
                 ->published()
@@ -33,5 +44,30 @@ class HomeController extends Controller
                 ->take(5)
                 ->get(['id', 'title', 'description', 'start_date', 'start_time', 'location', 'color']),
         ]);
+    }
+
+    /**
+     * Convert a stored image path to a fully-qualified URL.
+     *
+     * Handles:
+     *  - Full URLs (pass through unchanged).
+     *  - Absolute storage paths like "/storage/posters/abc.jpg".
+     *  - Relative paths like "banners/admission-2026.svg" (seeder data).
+     */
+    private function resolveImagePath(?string $path): string
+    {
+        if (!$path) {
+            return '';
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'storage/')) {
+            return asset($path);
+        }
+
+        return asset('storage/' . ltrim($path, '/'));
     }
 }
