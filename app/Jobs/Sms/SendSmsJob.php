@@ -5,6 +5,7 @@ namespace App\Jobs\Sms;
 use App\Models\SmsCampaign;
 use App\Models\SmsDeliveryEvent;
 use App\Models\SmsMessage;
+use App\Models\User;
 use App\Services\Sms\SmsMessageService;
 use App\Services\Sms\SmsProviderResolver;
 use Illuminate\Bus\Queueable;

@@ -56,7 +56,9 @@ export default function SmsDashboard({ stats, balance, balance_error, capabiliti
                         {balance_error ? (
                             <p className="text-sm text-rose-600">{balance_error}</p>
                         ) : (
-                            <p className="text-xl font-bold text-ink">{balance !== null ? balance : '—'}</p>
+                            <p className="text-xl font-bold text-ink">
+                                {balance !== null ? balance : 'Unable to load balance'}
+                            </p>
                         )}
                     </div>
                 </Card>

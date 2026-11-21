@@ -100,8 +100,9 @@ class Examination extends Model
 
     /**
      * Valid examination lifecycle transitions:
-     *   draft  → published   (Head of School publishes)
-     *   published → closed   (Head of School closes)
+     *   draft        → published   (Head of School publishes)
+     *   published    → closed      (Head of School closes / completes)
+     *   published    → draft       (Head of School reopens, only when safe)
      *
      * Teachers can never change examination status.
      */
@@ -109,8 +110,21 @@ class Examination extends Model
     {
         return match ($this->status) {
             'draft' => $to === 'published',
-            'published' => $to === 'closed',
+            'published' => in_array($to, ['closed', 'draft'], true),
             default => false,
         };
+    }
+
+    /** True when the examination may safely be returned to draft. */
+    public function reopenable(): bool
+    {
+        if ($this->status !== 'published') {
+            return false;
+        }
+
+        // Reopening is unsafe once results have been submitted or approved.
+        return ! Assessment::forExamination($this->id)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->exists();
     }
 }

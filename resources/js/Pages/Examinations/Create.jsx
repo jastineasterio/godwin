@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, CalendarDays, GraduationCap, BookOpen } from 'lucide-react';
+import { ChevronLeft, CalendarDays, GraduationCap, BookOpen, Plus } from 'lucide-react';
 import { router, useForm } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Field, FormActions, FormSection, Select, TextInput, Textarea } from '../../Components/form';

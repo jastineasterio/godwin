@@ -14,13 +14,20 @@ use App\Http\Controllers\HeadOfSchool\Sms\SmsDashboardController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsHistoryController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsResultsController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsTemplateController;
+use App\Http\Controllers\HeadOfSchool\SubjectController;
+use App\Http\Controllers\HeadOfSchool\TeacherController;
+use App\Http\Controllers\HeadOfSchool\TeachingAssignmentController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\Attendance\AttendanceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Comms\AnnouncementController;
 use App\Http\Controllers\Comms\MessageController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\Classes\SchoolClassController;
 use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\HeadOfSchool\AssetController;
+use App\Http\Controllers\HeadOfSchool\ExpenseController;
+use App\Http\Controllers\HeadOfSchool\FinanceDashboardController;
 use App\Http\Controllers\Finance\FeeStatementController;
 use App\Http\Controllers\Finance\FeeStructureController;
 use App\Http\Controllers\Finance\InvoiceController;
@@ -61,6 +68,48 @@ Route::middleware('auth')->group(function () {
             ->name('students.parents.unlink');
     });
 
+    /* ---- Classes management (Admin, Head of School) ---------------- */
+    Route::middleware('role:admin,head_of_school')->group(function () {
+        Route::resource('classes', SchoolClassController::class);
+        Route::patch('classes/{class}/archive', [SchoolClassController::class, 'archive'])
+            ->name('classes.archive');
+    });
+
+    /* ---- Subjects management (Admin, Head of School) --------------- */
+    Route::middleware('role:admin,head_of_school')->group(function () {
+        Route::get('/subjects', [SubjectController::class, 'index'])->name('subjects.index');
+        Route::get('/subjects/create', [SubjectController::class, 'create'])->name('subjects.create');
+        Route::post('/subjects', [SubjectController::class, 'store'])->name('subjects.store');
+        Route::get('/subjects/{subject}/edit', [SubjectController::class, 'edit'])->name('subjects.edit');
+        Route::put('/subjects/{subject}', [SubjectController::class, 'update'])->name('subjects.update');
+        Route::delete('/subjects/{subject}', [SubjectController::class, 'destroy'])->name('subjects.destroy');
+    });
+
+    /* ---- Teachers management (Admin, Head of School) --------------- */
+    Route::middleware('role:admin,head_of_school')->group(function () {
+        Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
+        Route::get('/teachers/create', [TeacherController::class, 'create'])->name('teachers.create');
+        Route::post('/teachers', [TeacherController::class, 'store'])->name('teachers.store');
+        Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
+        Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
+        Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
+        Route::patch('/teachers/{teacher}/status', [TeacherController::class, 'updateStatus'])
+            ->name('teachers.status');
+        Route::delete('/teachers/{teacher}', [TeacherController::class, 'destroy'])->name('teachers.destroy');
+    });
+
+    /* ---- Teaching assignments (Head of School, Admin) ----------------- */
+    Route::middleware('role:head_of_school,admin')->group(function () {
+        Route::get('/teaching-assignments', [TeachingAssignmentController::class, 'index'])
+            ->name('teaching-assignments.index');
+        Route::post('/teaching-assignments', [TeachingAssignmentController::class, 'store'])
+            ->name('teaching-assignments.store');
+        Route::put('/teaching-assignments/{assignment}', [TeachingAssignmentController::class, 'update'])
+            ->name('teaching-assignments.update');
+        Route::delete('/teaching-assignments/{assignment}', [TeachingAssignmentController::class, 'destroy'])
+            ->name('teaching-assignments.destroy');
+    });
+
     /* ---- 2. Attendance marking (Teacher, HoS, Admin) --------------- */
     Route::middleware('role:teacher,head_of_school,admin')->group(function () {
         Route::get('/attendance', [AttendanceController::class, 'index'])->name('attendance.index');
@@ -74,6 +123,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/assessments', [AssessmentController::class, 'store'])->name('assessments.store');
         Route::get('/assessments/{assessment}/edit', [AssessmentController::class, 'edit'])->name('assessments.edit');
         Route::put('/assessments/{assessment}', [AssessmentController::class, 'update'])->name('assessments.update');
+        Route::delete('/assessments/{assessment}', [AssessmentController::class, 'destroy'])->name('assessments.destroy');
     });
 
     /* ---- Examination management (Head of School + Admin only) ------------ */
@@ -85,9 +135,11 @@ Route::middleware('auth')->group(function () {
         Route::put('/examinations/{examination}', [ExaminationController::class, 'update'])->name('examinations.update');
         Route::delete('/examinations/{examination}', [ExaminationController::class, 'destroy'])->name('examinations.destroy');
         Route::get('/examinations/{examination}/progress', [ExaminationController::class, 'progress'])->name('examinations.progress');
+        Route::get('/examinations/{examination}/analytics', [ExaminationController::class, 'analytics'])->name('examinations.analytics');
         Route::post('/examinations/{examination}/approve', [ExaminationController::class, 'approve'])->name('examinations.approve');
         Route::post('/examinations/{examination}/return', [ExaminationController::class, 'returnResults'])->name('examinations.return');
         Route::post('/examinations/{examination}/publish', [ExaminationController::class, 'publish'])->name('examinations.publish');
+        Route::post('/examinations/{examination}/reopen', [ExaminationController::class, 'reopen'])->name('examinations.reopen');
         Route::post('/examinations/{examination}/close', [ExaminationController::class, 'close'])->name('examinations.close');
     });
 
@@ -97,6 +149,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/teacher/examinations/{examination}/results', [TeacherResultController::class, 'results'])->name('teacher.results');
         Route::put('/teacher/examinations/{examination}/results', [TeacherResultController::class, 'saveResults'])->name('teacher.results.save');
         Route::post('/teacher/examinations/{examination}/results/submit', [TeacherResultController::class, 'submitResults'])->name('teacher.results.submit');
+
+        /* ---- Class-first "Record Marks" workflow ------------------------- */
+        Route::get('/teacher/marks', [TeacherResultController::class, 'classes'])->name('teacher.marks.classes');
+        Route::get('/teacher/marks/subjects', [TeacherResultController::class, 'subjects'])->name('teacher.marks.subjects');
+        Route::get('/teacher/marks/examinations', [TeacherResultController::class, 'examinations'])->name('teacher.marks.examinations');
     });
 
     /* ---- Homework (Teacher creates for own classes; HoS/Admin view all) -- */
@@ -114,9 +171,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/my-classes/{class}', [MyClassesController::class, 'show'])->name('my-classes.show');
     });
 
-    /* ---- Results & Analytics (Teacher) ----------------------------------- */
-    Route::middleware('role:teacher')->group(function () {
+    /* ---- Results & Analytics (Teacher, Head of School, Senior Pastor) -----
+     *
+     * Head of School and Senior Pastor access is SCHOOL-WIDE but strictly
+     * READ-ONLY. This route exposes GET only — there are no mutating
+     * results-analytics endpoints. The teacher mark-entry routes
+     * (teacher.results.save / teacher.results.submit) remain role:teacher only,
+     * so leadership can never edit, submit, approve or return results from here.
+     */
+    Route::middleware('role:teacher,head_of_school,senior_pastor')->group(function () {
         Route::get('/results-analytics', [ResultsController::class, 'index'])->name('results-analytics.index');
+        Route::get('/results-analytics/print', [ResultsController::class, 'print'])->name('results-analytics.print');
     });
 
     /* ---- 4. Printable outputs (report card + fee statement) -------- */
@@ -143,6 +208,32 @@ Route::middleware('auth')->group(function () {
             ->name('payments.receipt');
 
         Route::resource('fee-structures', FeeStructureController::class)->except(['show']);
+    });
+
+    /* ---- Finance dashboard & expenses (Accountant, Admin, HoS) ----- */
+    Route::middleware('role:accountant,admin,head_of_school')->group(function () {
+        Route::get('/finance', [FinanceDashboardController::class, 'index'])->name('finance.index');
+        Route::get('/finance/report', [FinanceDashboardController::class, 'report'])->name('finance.report');
+        Route::get('/finance/report/pdf', [FinanceDashboardController::class, 'pdf'])->name('finance.report.pdf');
+        Route::get('/finance/report/csv', [FinanceDashboardController::class, 'csv'])->name('finance.report.csv');
+
+        Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+        Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+        Route::get('/expenses/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
+        Route::put('/expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+        Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+    });
+
+    /* ---- School Facilities & Assets (Admin, Head of School) -------- */
+    Route::middleware('role:admin,head_of_school')->group(function () {
+        Route::get('/facilities', [AssetController::class, 'index'])->name('facilities.index');
+        Route::get('/facilities/create', [AssetController::class, 'create'])->name('facilities.create');
+        Route::post('/facilities', [AssetController::class, 'store'])->name('facilities.store');
+        Route::get('/facilities/{asset}', [AssetController::class, 'show'])->name('facilities.show');
+        Route::get('/facilities/{asset}/edit', [AssetController::class, 'edit'])->name('facilities.edit');
+        Route::put('/facilities/{asset}', [AssetController::class, 'update'])->name('facilities.update');
+        Route::delete('/facilities/{asset}', [AssetController::class, 'destroy'])->name('facilities.destroy');
     });
 
     /* ---- 6. Announcements & broadcasts ------------------------------ */
@@ -256,6 +347,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/results', [SmsResultsController::class, 'index'])->name('sms.results');
         Route::get('/results/academic-years', [SmsResultsController::class, 'academicYears'])->name('sms.results.academic-years');
+        Route::post('/results/students', [SmsResultsController::class, 'students'])->name('sms.results.students');
         Route::post('/results/preview', [SmsResultsController::class, 'preview'])->name('sms.results.preview');
         Route::post('/results/send', [SmsResultsController::class, 'send'])->name('sms.results.send');
         Route::get('/results/history', [SmsResultsController::class, 'history'])->name('sms.results.history');

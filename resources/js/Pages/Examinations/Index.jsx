@@ -1,4 +1,5 @@
-import { BookOpen, ChevronRight, ClipboardList, GraduationCap, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { BookOpen, ChevronRight, ClipboardList, GraduationCap, Plus, RefreshCw } from 'lucide-react';
 import { Link, router, usePage } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, EmptyState } from '../../Components/ui';
@@ -7,8 +8,17 @@ import { PageHeader, PrimaryAction } from '../../Components/page';
 
 const STATUS_TONE = { draft: 'muted', published: 'secondary', closed: 'danger' };
 
+const ACTION_LABELS = {
+    publish: { label: 'Publish', confirm: 'Publish this examination?' },
+    reopen: { label: 'Reopen to Draft', confirm: 'Return this examination to draft?' },
+    close: { label: 'Close', confirm: 'Close this examination?' },
+};
+
 export default function ExaminationsIndex({ examinations, filters }) {
     const [deleting, setDeleting] = useState(null);
+    const [publishing, setPublishing] = useState(null);
+    const [reopening, setReopening] = useState(null);
+    const [closing, setClosing] = useState(null);
 
     const apply = (extra = {}) =>
         router.get(
@@ -16,6 +26,16 @@ export default function ExaminationsIndex({ examinations, filters }) {
             { search: filters.search ?? '', status: filters.status ?? '', ...extra },
             { preserveState: true, replace: true }
         );
+
+    const actionFor = (status) => {
+        if (status === 'draft') {
+            return 'publish';
+        }
+        if (status === 'published') {
+            return 'reopen';
+        }
+        return null;
+    };
 
     return (
         <DashboardLayout
@@ -68,41 +88,66 @@ export default function ExaminationsIndex({ examinations, filters }) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {examinations.data.map((e) => (
-                                        <tr key={e.id} className="transition hover:bg-canvas/60">
-                                            <td className="py-3 font-bold text-ink">{e.name}</td>
-                                            <td className="py-3 text-slate-600">{e.academic_year ?? '—'}</td>
-                                            <td className="py-3 text-slate-600">{e.term ?? '—'}</td>
-                                            <td className="py-3">
-                                                <Badge tone={STATUS_TONE[e.status] ?? 'muted'}>
-                                                    {e.status}
-                                                </Badge>
-                                            </td>
-                                            <td className="py-3 text-right">
-                                                <Link
-                                                    href={`/examinations/${e.id}/edit`}
-                                                    className="text-xs text-primary hover:underline mr-2"
-                                                >
-                                                    Edit
-                                                </Link>
-                                                <Link
-                                                    href={`/examinations/${e.id}/progress`}
-                                                    className="text-xs text-secondary hover:underline mr-2"
-                                                >
-                                                    Progress
-                                                </Link>
-                                                {e.status === 'draft' && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDeleting(e)}
-                                                        className="text-xs text-rose-600 hover:underline"
+                                    {examinations.data.map((e) => {
+                                        const action = actionFor(e.status);
+                                        const isDraft = e.status === 'draft';
+                                        return (
+                                            <tr key={e.id} className="transition hover:bg-canvas/60">
+                                                <td className="py-3 font-bold text-ink">{e.name}</td>
+                                                <td className="py-3 text-slate-600">{e.academic_year ?? '—'}</td>
+                                                <td className="py-3 text-slate-600">{e.term ?? '—'}</td>
+                                                <td className="py-3">
+                                                    <Badge tone={STATUS_TONE[e.status] ?? 'muted'}>
+                                                        {e.status}
+                                                    </Badge>
+                                                </td>
+                                                <td className="py-3 text-right">
+                                                    <Link
+                                                        href={`/examinations/${e.id}/edit`}
+                                                        className="text-xs text-primary hover:underline mr-2"
                                                     >
-                                                        Delete
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                        Edit
+                                                    </Link>
+                                                    <Link
+                                                        href={`/examinations/${e.id}/progress`}
+                                                        className="text-xs text-secondary hover:underline mr-2"
+                                                    >
+                                                        Progress
+                                                    </Link>
+                                                    {action && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (action === 'publish') setPublishing(e);
+                                                                if (action === 'reopen') setReopening(e);
+                                                                if (action === 'close') setClosing(e);
+                                                            }}
+                                                            className="text-xs font-medium hover:underline"
+                                                            style={{
+                                                                color:
+                                                                    action === 'close'
+                                                                        ? '#dc2626'
+                                                                        : action === 'publish'
+                                                                        ? '#15803d'
+                                                                        : '#0f766e',
+                                                            }}
+                                                        >
+                                                            {ACTION_LABELS[action].label}
+                                                        </button>
+                                                    )}
+                                                    {isDraft && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDeleting(e)}
+                                                            className="text-xs text-rose-600 hover:underline ml-2"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -120,6 +165,42 @@ export default function ExaminationsIndex({ examinations, filters }) {
                 title="Delete examination?"
                 message={`"${deleting?.name ?? ''}" will be removed.`}
                 confirmLabel="Delete"
+            />
+
+            <ConfirmDialog
+                open={!!publishing}
+                onClose={() => setPublishing(null)}
+                onConfirm={() => {
+                    router.post(`/examinations/${publishing.id}/publish`, { preserveScroll: true });
+                    setPublishing(null);
+                }}
+                title={ACTION_LABELS.publish.confirm}
+                message={`"${publishing?.name ?? ''}" will be published and made available to teachers.`}
+                confirmLabel="Publish"
+            />
+
+            <ConfirmDialog
+                open={!!reopening}
+                onClose={() => setReopening(null)}
+                onConfirm={() => {
+                    router.post(`/examinations/${reopening.id}/reopen`, { preserveScroll: true });
+                    setReopening(null);
+                }}
+                title={ACTION_LABELS.reopen.confirm}
+                message={`"${reopening?.name ?? ''}" will return to draft. This is not allowed once results have been submitted or approved.`}
+                confirmLabel="Reopen"
+            />
+
+            <ConfirmDialog
+                open={!!closing}
+                onClose={() => setClosing(null)}
+                onConfirm={() => {
+                    router.post(`/examinations/${closing.id}/close`, { preserveScroll: true });
+                    setClosing(null);
+                }}
+                title={ACTION_LABELS.close.confirm}
+                message={`"${closing?.name ?? ''}" will be closed. No further marks can be entered.`}
+                confirmLabel="Close"
             />
         </DashboardLayout>
     );

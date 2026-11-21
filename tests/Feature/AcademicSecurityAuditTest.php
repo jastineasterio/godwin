@@ -210,9 +210,11 @@ class AcademicSecurityAuditTest extends TestCase
             ->put("/assessments/{$assessment->id}", [
                 'student_id' => $student->id,
                 'title' => 'Mid Term - Phonics',
+                'type' => 'exam',
                 'score' => 18,
-                'class_id' => $otherClass->id,
-                'subject_id' => $otherSubject->id,
+                'max_score' => 20,
+                'class_id' => $class->id,
+                'subject_id' => $subject->id,
                 'term_id' => $term->id,
             ])
             ->assertRedirect();
@@ -328,6 +330,7 @@ class AcademicSecurityAuditTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         $assessment = Assessment::create([
             'examination_id' => $exam->id, 'student_id' => $student->id,
@@ -376,6 +379,10 @@ class AcademicSecurityAuditTest extends TestCase
             'name' => 'Draft Exam', 'academic_year_id' => $year->id,
             'term_id' => $term->id, 'status' => 'draft', 'created_by' => $hos->id,
         ]);
+        $class = $this->makeClass(null, 'KG1-A');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+        $draft->classes()->attach($class->id);
+        $draft->subjects()->attach($subject->id, ['max_score' => 20]);
 
         $this->actingAs($hos)
             ->post("/examinations/{$draft->id}/publish")

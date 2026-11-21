@@ -4,13 +4,16 @@ namespace App\Services\Sms;
 
 use App\Models\SmsTemplate;
 use Illuminate\Support\Collection;
-use Illuminate\Support\MessageBag;
 use Illuminate\Validation\ValidationException;
 
 /**
  * SMS template management with safe variable substitution.
  *
  * Only whitelisted variables are allowed — no arbitrary PHP execution.
+ *
+ * Supports both {{var}} (double-brace) and {var} (single-brace) placeholder
+ * syntax. Double-brace placeholders are replaced first so that single-brace
+ * substitution never corrupts a double-brace token.
  */
 class SmsTemplateService
 {
@@ -19,15 +22,24 @@ class SmsTemplateService
         'school_name',
         'parent_name',
         'student_name',
+        'admission_number',
         'class_name',
+        'academic_year',
+        'term',
         'term_name',
+        'examination_name',
         'exam_name',
+        'subject_summary',
+        'total_marks',
+        'total_max_marks',
+        'average_percentage',
+        'overall_grade',
         'amount',
         'date',
     ];
 
     /** Default results SMS template. */
-    public const DEFAULT_RESULTS_TEMPLATE = 'Dear {parent_name}, {student_name}\'s results for {exam_name}, {term_name} are available. Please contact the school for further details.';
+    public const DEFAULT_RESULTS_TEMPLATE = "Dear {{parent_name}}, results for {{student_name}} ({{admission_number}}), Class {{class_name}}, {{examination_name}}:\n\n{{subject_summary}}\n\nTotal: {{total_marks}}/{{total_max_marks}}\nAverage: {{average_percentage}}%\nGrade: {{overall_grade}}\n\nCongratulations on your child's progress.\n\nGod-Win Daycare & Nursery School.";
 
     /** @var array<string, SmsTemplate> */
     protected array $cache = [];
@@ -87,8 +99,9 @@ class SmsTemplateService
     /**
      * Render a template with the given variables.
      *
-     * Only whitelisted variables are substituted. Unknown placeholders
-     * are left as-is rather than causing errors.
+     * Supports both {{var}} and {var} placeholder syntax. Only whitelisted
+     * variables are substituted. Unknown placeholders are left as-is rather
+     * than causing errors.
      */
     public function render(string $template, array $variables = []): string
     {
@@ -96,19 +109,23 @@ class SmsTemplateService
 
         foreach (self::ALLOWED_VARIABLES as $var) {
             if (array_key_exists($var, $variables)) {
-                $safe['{'.$var.'}'] = (string) $variables[$var];
+                $safe[$var] = (string) $variables[$var];
             }
         }
 
-        return str_replace(array_keys($safe), array_values($safe), $template);
+        return preg_replace_callback('/\{\{?([a-z_]+)\}?\}/', function ($m) use ($safe) {
+            return $safe[$m[1]] ?? $m[0];
+        }, $template);
     }
 
     /**
      * Extract variable placeholders from a template string.
+     *
+     * Supports both {{var}} and {var} syntax.
      */
     public function extractVariables(string $template): array
     {
-        preg_match_all('/\{([a-z_]+)\}/', $template, $matches);
+        preg_match_all('/\{\{?([a-z_]+)\}?\}/', $template, $matches);
 
         return array_unique($matches[1]);
     }
@@ -124,9 +141,9 @@ class SmsTemplateService
         $invalid = array_values(array_diff($used, self::ALLOWED_VARIABLES));
 
         if (! empty($invalid)) {
-            throw new ValidationException(
-                MessageBag::make(['template' => 'Template uses invalid variables: '.implode(', ', $invalid).'. Allowed: '.implode(', ', self::ALLOWED_VARIABLES).'.'])
-            );
+            throw ValidationException::withMessages([
+                'template' => 'Template uses invalid variables: '.implode(', ', $invalid).'. Allowed: '.implode(', ', self::ALLOWED_VARIABLES).'.',
+            ]);
         }
     }
 

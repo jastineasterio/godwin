@@ -7,6 +7,7 @@ use App\Jobs\Sms\SendSmsJob;
 use App\Models\SmsCampaign;
 use App\Models\SmsMessage;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * High-level SMS message sending service.
@@ -98,36 +99,63 @@ class SmsMessageService
             ];
         }
 
-        $messageRecord = SmsMessage::create([
-            'campaign_id' => $campaign?->id,
-            'user_id' => $user?->id,
-            'to' => $to,
-            'message' => $message,
-            'category' => $category,
-            'sender_id' => $result['senderId'] ?? $options['sender_id'] ?? null,
-            'provider_message_id' => $result['messageId'] ?? null,
-            'batch_id' => $result['batchId'] ?? null,
-            'provider_type' => $provider->type(),
-            'provider_name' => $provider->name(),
-            'provider_status' => $result['providerStatus'] ?? null,
-            'status' => $this->mapProviderStatus(
-                $result['providerStatus'] ?? null,
-                $result['success'],
-                $result['ambiguous'] ?? false
-            ),
-            'sent_at' => $result['success'] ? now() : null,
-            'delivered_at' => null,
-            'error_message' => $result['error'] ?? null,
-            'idempotency_key' => $idempotencyKey,
-            'metadata' => array_merge($metadata, [
-                'provider_request' => [
-                    'to' => $to,
-                    'message' => $message,
-                    'sender_id' => $options['sender_id'] ?? null,
-                    'ambiguous' => $result['ambiguous'] ?? false,
-                ],
-            ]),
-        ]);
+        $messageRecord = null;
+
+        try {
+            $messageRecord = SmsMessage::create([
+                'campaign_id' => $campaign?->id,
+                'user_id' => $user?->id,
+                'to' => $to,
+                'message' => $message,
+                'category' => $category,
+                'sender_id' => $result['senderId'] ?? $options['sender_id'] ?? null,
+                'provider_message_id' => $result['messageId'] ?? null,
+                'batch_id' => $result['batchId'] ?? null,
+                'provider_type' => $provider->type(),
+                'provider_name' => $provider->name(),
+                'provider_status' => $result['providerStatus'] ?? null,
+                'status' => $this->mapProviderStatus(
+                    $result['providerStatus'] ?? null,
+                    $result['success'],
+                    $result['ambiguous'] ?? false
+                ),
+                'sent_at' => $result['success'] ? now() : null,
+                'delivered_at' => null,
+                'error_message' => $result['error'] ?? null,
+                'idempotency_key' => $idempotencyKey,
+                'metadata' => array_merge($metadata, [
+                    'provider_request' => [
+                        'to' => $to,
+                        'message' => $message,
+                        'sender_id' => $options['sender_id'] ?? null,
+                        'ambiguous' => $result['ambiguous'] ?? false,
+                    ],
+                ]),
+            ]);
+        } catch (\Throwable $e) {
+            // Provider accepted the message but the local record could not be
+            // persisted. Do not throw: the caller's batch must continue so one
+            // database failure does not mark every recipient as failed.
+            Log::error('SMS provider accepted but local recording failed', [
+                'to' => $to,
+                'provider_message_id' => $result['messageId'] ?? null,
+                'batch_id' => $result['batchId'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => true,
+                'messageId' => $result['messageId'] ?? null,
+                'batchId' => $result['batchId'] ?? null,
+                'idempotent' => false,
+                'status' => 'submission_unknown',
+                'providerStatus' => $result['providerStatus'] ?? null,
+                'error' => 'Provider accepted the message but it could not be recorded locally.',
+                'rate_limited' => $result['rate_limited'] ?? false,
+                'ambiguous' => false,
+                'internal_id' => null,
+            ];
+        }
 
         return [
             'success' => $result['success'],
@@ -257,6 +285,10 @@ class SmsMessageService
 
     /**
      * Check SMS balance/credits.
+     *
+     * Successful results are cached for a short TTL so the balance endpoint is
+     * not called on every dashboard render. Failures are never cached so the
+     * next request retries the provider.
      */
     public function checkBalance(): array
     {
@@ -265,12 +297,28 @@ class SmsMessageService
         if (! $provider || ! $provider->supportsBalance()) {
             return [
                 'success' => false,
+                'balance' => null,
                 'error' => 'Balance checking not supported by this provider.',
                 'code' => 'unsupported_operation',
             ];
         }
 
-        return $provider->checkBalance();
+        $cacheKey = 'sms.provider.balance.'.$provider->type();
+
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $provider->checkBalance();
+
+        // Never cache a failure: the next request should retry the provider so
+        // a transient outage does not stick as "last known balance."
+        if (($result['success'] ?? false) === true) {
+            Cache::put($cacheKey, $result, 300);
+        }
+
+        return $result;
     }
 
     /**

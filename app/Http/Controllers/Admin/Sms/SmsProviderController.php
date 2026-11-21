@@ -7,9 +7,12 @@ use App\Models\SmsProviderConfig;
 use App\Services\Sms\SmsCreditService;
 use App\Services\Sms\SmsMessageService;
 use App\Services\Sms\SmsProviderResolver;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -50,6 +53,11 @@ class SmsProviderController extends Controller
             'last_test_message' => $c->last_test_message,
             'capabilities' => $c->capabilities,
             'created_at' => $c->created_at,
+            'urls' => [
+                'update' => route('sms.admin.providers.update', $c->id),
+                'status' => route('sms.admin.providers.status', $c->id),
+                'destroy' => route('sms.admin.providers.destroy', $c->id),
+            ],
         ]);
 
         $activeProvider = $this->resolver->resolve();
@@ -65,6 +73,10 @@ class SmsProviderController extends Controller
             ] : null,
             'capabilities' => $capabilities,
             'available_providers' => $this->resolver->availableProviders(),
+            'routes' => [
+                'store' => route('sms.admin.providers.store'),
+                'test_connection' => route('sms.admin.test-connection'),
+            ],
         ]);
     }
 
@@ -88,25 +100,29 @@ class SmsProviderController extends Controller
             'capabilities' => ['nullable', 'array'],
         ]);
 
-        // Deactivate existing active provider if activating this one.
-        if ($validated['is_active'] ?? false) {
-            SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
-        }
+        $this->ensureCanActivate($validated);
 
-        $config = SmsProviderConfig::create([
-            'name' => $validated['name'],
-            'provider_type' => $validated['provider_type'],
-            'base_url' => $validated['base_url'],
-            'auth_header_name' => $validated['auth_header_name'] ?? 'X-API-Key',
-            'api_key' => $validated['api_key'] ?? null,
-            'api_secret' => $validated['api_secret'] ?? null,
-            'username' => $validated['username'] ?? null,
-            'password' => $validated['password'] ?? null,
-            'sender_id' => $validated['sender_id'] ?? null,
-            'is_active' => $validated['is_active'] ?? false,
-            'timeout_seconds' => $validated['timeout_seconds'] ?? 30,
-            'capabilities' => $validated['capabilities'] ?? null,
-        ]);
+        DB::transaction(function () use ($validated) {
+            // Only one provider can be active at a time.
+            if ((bool) ($validated['is_active'] ?? false)) {
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+            }
+
+            SmsProviderConfig::create([
+                'name' => $validated['name'],
+                'provider_type' => $validated['provider_type'],
+                'base_url' => $validated['base_url'],
+                'auth_header_name' => $validated['auth_header_name'] ?? 'X-API-Key',
+                'api_key' => $validated['api_key'] ?? null,
+                'api_secret' => $validated['api_secret'] ?? null,
+                'username' => $validated['username'] ?? null,
+                'password' => $validated['password'] ?? null,
+                'sender_id' => $validated['sender_id'] ?? null,
+                'is_active' => $validated['is_active'] ?? false,
+                'timeout_seconds' => $validated['timeout_seconds'] ?? 30,
+                'capabilities' => $validated['capabilities'] ?? null,
+            ]);
+        });
 
         return back()->with('success', 'SMS provider configuration saved.');
     }
@@ -130,17 +146,26 @@ class SmsProviderController extends Controller
             'capabilities' => ['sometimes', 'nullable', 'array'],
         ]);
 
-        if (($validated['is_active'] ?? false) && ! $config->is_active) {
-            SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
-        }
+        $activating = (bool) (($validated['is_active'] ?? false) && ! $config->is_active);
 
-        $config->update($this->sanitizeCredentialUpdate($validated, $config));
+        $this->ensureCanActivate(array_merge($validated, [
+            'provider_type' => $config->provider_type,
+        ]), $config);
+
+        DB::transaction(function () use ($config, $validated, $activating) {
+            // Only one provider can be active at a time.
+            if ($activating) {
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+            }
+
+            $config->update($this->sanitizeCredentialUpdate($validated, $config));
+        });
 
         return back()->with('success', 'SMS provider configuration updated.');
     }
 
     /** Activate or deactivate a provider configuration. */
-    public function toggleStatus(Request $request, SmsProviderConfig $config): RedirectResponse
+    public function toggleStatus(Request $request, SmsProviderConfig $config): RedirectResponse|JsonResponse
     {
         $this->authorizeManageSettings($request->user());
 
@@ -148,11 +173,32 @@ class SmsProviderController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        if ($request->boolean('is_active') && ! $config->is_active) {
-            SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+        $desired = $request->boolean('is_active');
+
+        if ($desired && ! $config->is_active) {
+            $this->ensureCanActivate(array_merge($request->only('is_active'), [
+                'provider_type' => $config->provider_type,
+            ]), $config);
         }
 
-        $config->update(['is_active' => $request->boolean('is_active')]);
+        $respondsJson = ! $request->header('X-Inertia') && $request->expectsJson();
+
+        DB::transaction(function () use ($config, $desired) {
+            // Only one provider can be active at a time.
+            if ($desired && ! $config->is_active) {
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+            }
+
+            $config->update(['is_active' => $desired]);
+        });
+
+        if ($respondsJson) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Provider status updated.',
+                'is_active' => $config->fresh()->is_active,
+            ]);
+        }
 
         return back()->with('success', 'Provider status updated.');
     }
@@ -216,6 +262,38 @@ class SmsProviderController extends Controller
             'currency' => $result['currency'] ?? null,
             'error' => $result['error'] ?? null,
         ]);
+    }
+
+    /**
+     * Ensure a provider may be activated.
+     *
+     * DARSMS authenticates with an API key (X-API-Key), so an activator
+     * requires a configured API key — either submitted now or already stored
+     * encrypted on the existing configuration. Optional credentials (secret,
+     * username, password) never block saving or activation.
+     */
+    protected function ensureCanActivate(array $validated, ?SmsProviderConfig $existing = null): void
+    {
+        if (! ((bool) ($validated['is_active'] ?? false))) {
+            return;
+        }
+
+        if (($validated['provider_type'] ?? $existing?->provider_type) !== 'darsms') {
+            return;
+        }
+
+        $apiKey = array_key_exists('api_key', $validated) ? $validated['api_key'] : null;
+
+        if (! $apiKey && $existing) {
+            $apiKey = $existing->decryptedApiKey();
+        }
+
+        if (! $apiKey) {
+            throw ValidationException::withMessages([
+                'api_key' => 'An API key is required to activate the DARSMS provider.',
+                'is_active' => 'Provider could not be activated: required configuration is incomplete.',
+            ]);
+        }
     }
 
     /**

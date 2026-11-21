@@ -4,11 +4,12 @@ namespace App\Http\Controllers\HeadOfSchool\Sms;
 
 use App\Http\Controllers\Controller;
 use App\Models\SmsTemplate;
+use App\Enums\UserRole;
 use App\Services\Sms\SmsTemplateService;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Validation\ValidationException;
 
 /**
  * HEAD OF SCHOOL — SMS template management.
@@ -43,17 +44,19 @@ class SmsTemplateController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request)
     {
+        $this->authorizeManage($request->user());
+
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:100'],
+            'name' => ['required', 'string', 'max:100', 'unique:sms_templates,name,NULL,id,deleted_at,NULL'],
             'category' => ['required', 'string', 'max:50'],
             'template' => ['required', 'string', 'max:1600'],
             'is_active' => ['boolean'],
         ]);
 
         try {
-            $this->templateService->create([
+            $template = $this->templateService->create([
                 'name' => $validated['name'],
                 'category' => $validated['category'],
                 'template' => $validated['template'],
@@ -61,16 +64,26 @@ class SmsTemplateController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            return back()->with('success', 'Template created.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return back()->withErrors($e->errors())->withInput();
+            return response()->json([
+                'success' => true,
+                'message' => 'Template created.',
+                'template' => $this->templateArray($template),
+            ], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+            ], 422);
         }
     }
 
-    public function update(Request $request, SmsTemplate $template): RedirectResponse
+    public function update(Request $request, SmsTemplate $template)
     {
+        $this->authorizeManage($request->user());
+
         $validated = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:100'],
+            'name' => ['sometimes', 'required', 'string', 'max:100', 'unique:sms_templates,name,'.$template->id],
             'category' => ['sometimes', 'required', 'string', 'max:50'],
             'template' => ['sometimes', 'required', 'string', 'max:1600'],
             'is_active' => ['sometimes', 'boolean'],
@@ -78,25 +91,78 @@ class SmsTemplateController extends Controller
 
         try {
             $this->templateService->update($template, $validated);
+            $template->refresh();
 
-            return back()->with('success', 'Template updated.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return back()->withErrors($e->errors())->withInput();
+            return response()->json([
+                'success' => true,
+                'message' => 'Template updated.',
+                'template' => $this->templateArray($template),
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+            ], 422);
         }
     }
 
-    public function toggle(SmsTemplate $template): RedirectResponse
+    public function toggle(SmsTemplate $template)
     {
-        $this->templateService->toggle($template);
+        $this->authorizeManage(request()->user());
 
-        return back()->with('success', 'Template status updated.');
+        $this->templateService->toggle($template);
+        $template->refresh();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Template status updated.',
+            'template' => $this->templateArray($template),
+        ]);
     }
 
-    public function destroy(SmsTemplate $template): RedirectResponse
+    public function destroy(SmsTemplate $template)
     {
+        $this->authorizeManage(request()->user());
+
         $this->templateService->delete($template);
 
-        return back()->with('success', 'Template deleted.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Template deleted.',
+            'template' => ['id' => $template->id],
+        ]);
+    }
+
+    /**
+     * Authorize template management (Head of School or Admin).
+     *
+     * @return void
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     */
+    protected function authorizeManage(?\App\Models\User $user): void
+    {
+        if (! $user || ! $user->hasAnyRole([UserRole::Admin, UserRole::HeadOfSchool])) {
+            abort(403, 'Only administrators and heads of school can manage SMS templates.');
+        }
+    }
+
+    /**
+     * Build a frontend-safe template array (no credentials, no secrets).
+     *
+     * @return array<string, mixed>
+     */
+    protected function templateArray(SmsTemplate $template): array
+    {
+        return [
+            'id' => $template->id,
+            'name' => $template->name,
+            'category' => $template->category,
+            'template' => $template->template,
+            'is_active' => (bool) $template->is_active,
+            'created_by' => $template->creator?->name,
+            'created_at' => $template->created_at,
+        ];
     }
 
     public function preview(Request $request): Response

@@ -6,6 +6,28 @@ import { GraduationCap, Phone, Filter } from 'lucide-react';
 export default function SmsResultsHistory({ messages, examinations, selected_examination }) {
     const { flash } = usePage().props;
 
+    const smsStatusLabel = (status) => {
+        switch (status) {
+            case 'delivered': return 'Delivered';
+            case 'sent': return 'Sent';
+            case 'queued': return 'Queued';
+            case 'failed': return 'Failed — Retry available';
+            case 'submission_unknown': return 'Submission unknown — Verification required';
+            default: return 'Pending';
+        }
+    };
+
+    const smsStatusTone = (status) => {
+        switch (status) {
+            case 'delivered': return 'success';
+            case 'sent': return 'primary';
+            case 'queued': return 'warning';
+            case 'failed': return 'danger';
+            case 'submission_unknown': return 'warning';
+            default: return 'secondary';
+        }
+    };
+
     return (
         <DashboardLayout title="Results SMS History" subtitle="View results notification history.">
             {flash && <Flash />}
@@ -53,13 +75,16 @@ export default function SmsResultsHistory({ messages, examinations, selected_exa
                             <tbody className="divide-y divide-slate-100">
                                 {messages?.data?.map((m) => (
                                     <tr key={m.id} className="hover:bg-canvas">
-                                        <td className="py-3 text-slate-600">{m.student_id || '—'}</td>
-                                        <td className="py-3 text-slate-600">{m.parent_id || '—'}</td>
+                                        <td className="py-3 text-slate-600">{m.student_name || `Student #${m.student_id}` || '—'}</td>
+                                        <td className="py-3 text-slate-600">{m.parent_name || `Parent #${m.parent_id}` || '—'}</td>
                                         <td className="py-3 font-mono text-slate-600">{m.to}</td>
                                         <td className="py-3 text-slate-600 truncate max-w-xs">{m.message}</td>
                                         <td className="py-3">
-                                            <Badge tone={m.status === 'delivered' ? 'success' : m.status === 'failed' ? 'danger' : 'warning'}>
-                                                {m.status}
+                                            <Badge tone={smsStatusTone(m.status)}>
+                                                {smsStatusLabel(m.status)}
+                                                {m.is_resend && (
+                                                    <span className="ml-1 text-xs opacity-80">(retry)</span>
+                                                )}
                                             </Badge>
                                         </td>
                                         <td className="py-3 text-slate-600">{m.sent_by}</td>

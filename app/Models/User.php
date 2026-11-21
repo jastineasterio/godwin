@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * God-Win SMS system user.
@@ -93,6 +94,24 @@ class User extends Authenticatable
             'teacher_id',
             'subject_id'
         )->withPivot('class_id')->withTimestamps();
+    }
+
+    /**
+     * IDs of all classes this teacher is assigned to: either as the class
+     * teacher (classes.teacher_id) or via a subject assignment on the
+     * `class_subject` pivot. Used to scope the teacher's portal and marks
+     * recording to their assigned classes.
+     *
+     * @return array<int>
+     */
+    public function assignedClassIds(): array
+    {
+        return collect()
+            ->merge($this->classesTaught()->pluck('classes.id'))
+            ->merge(DB::table('class_subject')->where('teacher_id', $this->id)->pluck('class_id'))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** Timetable slots taught by this user. */

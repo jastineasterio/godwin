@@ -30,6 +30,7 @@ export default function TeacherAssignedExaminations({ examinations }) {
                                     <th className="pb-3 font-bold">Term</th>
                                     <th className="pb-3 font-bold">Status</th>
                                     <th className="pb-3 font-bold">Classes</th>
+                                    <th className="pb-3 font-bold">Subjects (max marks)</th>
                                     <th className="pb-3 font-bold text-right">Action</th>
                                 </tr>
                             </thead>
@@ -47,13 +48,26 @@ export default function TeacherAssignedExaminations({ examinations }) {
                                         <td className="py-3 text-slate-600">
                                             {exam.classes.map((c) => `${c.name} (${c.code})`).join(', ')}
                                         </td>
+                                        <td className="py-3 text-slate-600">
+                                            {exam.subjects
+                                                .map((s) => `${s.name} (${s.max_score})`)
+                                                .join(', ')}
+                                        </td>
                                         <td className="py-3 text-right">
-                                            <Link
-                                                href="/teacher/examinations/results"
-                                                className="btn-primary text-xs px-3 py-1.5"
-                                            >
-                                                Record Results <ChevronRight className="h-3 w-3 ml-1" />
-                                            </Link>
+                                            {exam.status !== 'published' ? (
+                                                <span className="text-xs text-slate-400">—</span>
+                                            ) : (
+                                                <Link
+                                                    href={
+                                                        `/teacher/examinations/${exam.id}/results` +
+                                                        `?class_id=${exam.classes[0]?.id ?? ''}` +
+                                                        `&subject_id=${exam.subjects[0]?.id ?? ''}`
+                                                    }
+                                                    className="btn-primary text-xs px-3 py-1.5"
+                                                >
+                                                    Record Results <ChevronRight className="h-3 w-3 ml-1" />
+                                                </Link>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -70,13 +84,25 @@ export default function TeacherAssignedExaminations({ examinations }) {
                                         <p className="text-xs text-slate-500">
                                             {exam.academic_year} · {exam.term} · {exam.status}
                                         </p>
+                                        <p className="text-xs text-slate-500 truncate">
+                                            {exam.classes.map((c) => c.name).join(', ')} ·
+                                            {exam.subjects.map((s) => `${s.name} /${s.max_score}`).join(', ')}
+                                        </p>
                                     </div>
-                                    <Link
-                                        href="/teacher/examinations/results"
-                                        className="btn-primary text-xs px-3 py-1.5"
-                                    >
-                                        Record Results
-                                    </Link>
+                                    {exam.status === 'published' ? (
+                                        <Link
+                                            href={
+                                                `/teacher/examinations/${exam.id}/results` +
+                                                `?class_id=${exam.classes[0]?.id ?? ''}` +
+                                                `&subject_id=${exam.subjects[0]?.id ?? ''}`
+                                            }
+                                            className="btn-primary text-xs px-3 py-1.5"
+                                        >
+                                            Record Results
+                                        </Link>
+                                    ) : (
+                                        <span className="text-xs text-slate-400 px-3 py-1.5">—</span>
+                                    )}
                                 </div>
                             </li>
                         ))}

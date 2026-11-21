@@ -3,6 +3,7 @@ import { Calculator, ChevronLeft, Save, Send } from 'lucide-react';
 import { router, usePage, useForm } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card } from '../../Components/ui';
+import { ConfirmDialog } from '../../Components/modal';
 import { Field, FormActions, FormSection, Select, TextInput } from '../../Components/form';
 import { PageHeader } from '../../Components/page';
 
@@ -18,6 +19,8 @@ export default function TeacherResultEntry({
 }) {
     const [selectedClassId, setSelectedClassId] = useState(klass?.id ?? '');
     const [selectedSubjectId, setSelectedSubjectId] = useState(subject?.id ?? '');
+
+    const [submitting, setSubmitting] = useState(false);
 
     const studentsForClass = selectedClassId
         ? students.filter((s) => s.id)
@@ -36,7 +39,7 @@ export default function TeacherResultEntry({
     const changeClass = (classId) => {
         setSelectedClassId(classId);
         router.get(
-            '/teacher/examinations/results',
+            `/teacher/examinations/${examination.id}/results`,
             { class_id: classId, subject_id: '' },
             { preserveScroll: true, preserveState: true }
         );
@@ -45,7 +48,7 @@ export default function TeacherResultEntry({
     const changeSubject = (subjectId) => {
         setSelectedSubjectId(subjectId);
         router.get(
-            '/teacher/examinations/results',
+            `/teacher/examinations/${examination.id}/results`,
             { class_id: selectedClassId, subject_id: subjectId },
             { preserveScroll: true, preserveState: true }
         );
@@ -73,11 +76,7 @@ export default function TeacherResultEntry({
 
     const submitResults = (e) => {
         e.preventDefault();
-        router.post(
-            `/teacher/examinations/${examination.id}/results/submit`,
-            { class_id: selectedClassId, subject_id: selectedSubjectId },
-            { preserveScroll: true }
-        );
+        setSubmitting(true);
     };
 
     const completion =
@@ -300,7 +299,7 @@ export default function TeacherResultEntry({
                                     <button
                                         type="button"
                                         onClick={submitResults}
-                                        disabled={form.processing || completion === 0}
+                                        disabled={form.processing || completion === 0 || submitting}
                                         className="btn-secondary mr-2"
                                     >
                                         <Send className="h-4 w-4 mr-2" />
@@ -320,6 +319,21 @@ export default function TeacherResultEntry({
                     </Card>
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={submitting}
+                onClose={() => setSubmitting(false)}
+                onConfirm={() => {
+                    router.post(
+                        `/teacher/examinations/${examination.id}/results/submit`,
+                        { class_id: selectedClassId, subject_id: selectedSubjectId },
+                        { preserveScroll: true, onFinish: () => setSubmitting(false) }
+                    );
+                }}
+                title="Submit marks for review?"
+                message="Submitted marks can no longer be edited by you. Ask the Head of School to return them if corrections are needed."
+                confirmLabel="Submit"
+            />
         </DashboardLayout>
     );
 }

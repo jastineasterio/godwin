@@ -4,21 +4,26 @@ namespace Tests\Feature;
 
 use App\Enums\ClassLevel;
 use App\Enums\UserRole;
-use App\Models\Examination;
+use App\Jobs\Sms\SendSmsJob;
+use App\Models\AcademicYear;
 use App\Models\Assessment;
+use App\Models\Examination;
+use App\Models\SchoolClass;
 use App\Models\SmsMessage;
 use App\Models\SmsProviderConfig;
-use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Subject;
+use App\Models\Term;
 use App\Models\User;
 use App\Services\Sms\Providers\DarsmsProvider;
+use App\Services\Sms\SmsMessageService;
 use App\Services\Sms\SmsRecipientService;
 use App\Services\Sms\SmsResultsService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
@@ -156,7 +161,7 @@ class SmsIntegrationTest extends TestCase
     public function test_darsms_provider_timeout(): void
     {
         Http::fake(function ($request) {
-            throw new \Illuminate\Http\Client\ConnectionException('Connection timed out');
+            throw new ConnectionException('Connection timed out');
         });
 
         $provider = new DarsmsProvider([
@@ -462,7 +467,7 @@ class SmsIntegrationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $academicYear = \App\Models\AcademicYear::create([
+        $academicYear = AcademicYear::create([
             'name' => '2026',
             'start_date' => '2026-01-01',
             'end_date' => '2026-12-31',
@@ -470,7 +475,7 @@ class SmsIntegrationTest extends TestCase
             'status' => 'active',
         ]);
 
-        $term = \App\Models\Term::create([
+        $term = Term::create([
             'academic_year_id' => $academicYear->id,
             'name' => 'Term 1',
             'start_date' => '2026-01-01',
@@ -485,7 +490,7 @@ class SmsIntegrationTest extends TestCase
             'status' => 'published',
         ]);
 
-        $key = \App\Services\Sms\SmsMessageService::resultsIdempotencyKey(
+        $key = SmsMessageService::resultsIdempotencyKey(
             $student->id,
             $parent->id,
             $exam->id,
@@ -587,9 +592,9 @@ class SmsIntegrationTest extends TestCase
     {
         Queue::fake();
 
-        \App\Jobs\Sms\SendSmsJob::dispatch(1, '255712345678', 'Test message');
+        SendSmsJob::dispatch(1, '255712345678', 'Test message');
 
-        Queue::assertPushed(\App\Jobs\Sms\SendSmsJob::class);
+        Queue::assertPushed(SendSmsJob::class);
     }
 
     /* ---------------------- Provider Capability Tests ---------------------- */
@@ -715,7 +720,7 @@ class SmsIntegrationTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $academicYear = \App\Models\AcademicYear::create([
+        $academicYear = AcademicYear::create([
             'name' => '2026',
             'start_date' => '2026-01-01',
             'end_date' => '2026-12-31',
@@ -723,7 +728,7 @@ class SmsIntegrationTest extends TestCase
             'status' => 'active',
         ]);
 
-        $term = \App\Models\Term::create([
+        $term = Term::create([
             'academic_year_id' => $academicYear->id,
             'name' => 'Term 1',
             'start_date' => '2026-01-01',
@@ -790,8 +795,11 @@ class SmsIntegrationTest extends TestCase
         $result = $service->sendResultsNotifications(
             $exam->id,
             [$studentNoResult->id, $studentApproved->id],
-            'Results are out.',
-            $user
+            $user,
+            null,
+            null,
+            null,
+            ['message' => 'Results are out.']
         );
 
         $this->assertSame(1, $result['sent']);
@@ -802,13 +810,35 @@ class SmsIntegrationTest extends TestCase
         $resend = $service->sendResultsNotifications(
             $exam->id,
             [$studentNoResult->id],
-            'Results are out.',
             $user,
             null,
-            ['is_resend' => true]
+            null,
+            null,
+            ['message' => 'Results are out.', 'is_resend' => true]
         );
 
         $this->assertSame(0, $resend['sent']);
         $this->assertSame(1, $resend['skipped']);
+    }
+
+    public function test_darsms_balance_missing_parsable_field_returns_null(): void
+    {
+        // DARSMS may return a successful envelope whose payload carries no
+        // recognised balance field. That must surface as "unknown" (null
+        // balance), never as zero or a fabricated number.
+        Http::fake([
+            '*' => Http::response(['success' => true, 'message' => 'OK', 'data' => ['currency' => 'TZS']], 200),
+        ]);
+
+        $provider = new DarsmsProvider([
+            'base_url' => 'https://test.darsms.local/api/v1',
+            'api_key' => 'test-key',
+        ]);
+
+        $result = $provider->checkBalance();
+
+        $this->assertTrue($result['success']);
+        $this->assertNull($result['balance']);
+        $this->assertSame('TZS', $result['currency']);
     }
 }

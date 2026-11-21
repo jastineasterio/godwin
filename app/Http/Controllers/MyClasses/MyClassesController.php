@@ -20,7 +20,9 @@ class MyClassesController extends Controller
     {
         $teacher = $request->user();
 
-        $classes = $teacher->classesTaught()
+        $classIds = $teacher->assignedClassIds();
+
+        $classes = SchoolClass::whereIn('id', $classIds)
             ->withCount(['students' => fn ($q) => $q->where('status', 'active')])
             ->with('subjects:id,name,code')
             ->ordered()

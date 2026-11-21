@@ -17,3 +17,12 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# Local SQLite databases and backups
+/*.sqlite
+/*.sqlite-*
+/*.sqlite.*
+/*.db
+/*.db-*
+/PASTE_BACKUP_PATH_HERE
+/godwin

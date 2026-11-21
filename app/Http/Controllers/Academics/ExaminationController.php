@@ -124,7 +124,7 @@ class ExaminationController extends Controller
             ->with('success', 'Examination created successfully.');
     }
 
-    public function edit(Request $request, Examination $examination): Response
+    public function edit(Request $request, Examination $examination): Response|RedirectResponse
     {
         abort_unless(
             $request->user()->hasAnyRole([UserRole::HeadOfSchool, UserRole::Admin]),
@@ -338,6 +338,154 @@ class ExaminationController extends Controller
         ]);
     }
 
+    /** Performance analytics for an examination (Head of School / Admin). */
+    public function analytics(Request $request, Examination $examination): Response
+    {
+        abort_unless(
+            $request->user()->hasAnyRole([UserRole::HeadOfSchool, UserRole::Admin]),
+            403
+        );
+
+        $classIds = $examination->classes->pluck('id')->all();
+        $subjectIds = $examination->subjects->pluck('id')->all();
+
+        $results = Assessment::forExamination($examination->id)
+            ->whereIn('class_id', $classIds)
+            ->whereNotNull('score')
+            ->with(['student:id,first_name,last_name,reg_no,class_id', 'subject:id,name,code', 'schoolClass:id,name,code'])
+            ->get();
+
+        $scored = $results->filter(fn ($r) => (float) $r->max_score > 0);
+
+        $overallAverage = $scored->isEmpty()
+            ? 0
+            : round($scored->avg(fn ($r) => $r->percentage), 1);
+
+        $highest = $scored->isEmpty()
+            ? null
+            : $scored->sortByDesc(fn ($r) => $r->percentage)->first();
+
+        $lowest = $scored->isEmpty()
+            ? null
+            : $scored->sortBy(fn ($r) => $r->percentage)->first();
+
+        $passCount = $scored->filter(fn ($r) => $r->percentage >= 50)->count();
+        $passRate = $scored->isEmpty() ? 0 : round(($passCount / $scored->count()) * 100, 1);
+
+        // Grade distribution (fixed scheme: A 80+, B 70-79, C 60-69, D 50-59, F <50)
+        $grades = [
+            ['label' => 'A (80–100)', 'min' => 80, 'max' => 100],
+            ['label' => 'B (70–79)', 'min' => 70, 'max' => 79],
+            ['label' => 'C (60–69)', 'min' => 60, 'max' => 69],
+            ['label' => 'D (50–59)', 'min' => 50, 'max' => 59],
+            ['label' => 'F (0–49)', 'min' => 0, 'max' => 49],
+        ];
+        $gradeDistribution = collect($grades)->map(function ($g) use ($scored) {
+            $count = $scored->filter(fn ($r) => $r->percentage >= $g['min'] && $r->percentage <= $g['max'])->count();
+            return [
+                'label' => $g['label'],
+                'min' => $g['min'],
+                'max' => $g['max'],
+                'count' => $count,
+                'percentage' => $scored->isEmpty() ? 0 : round(($count / $scored->count()) * 100, 1),
+            ];
+        })->all();
+
+        $needsSupport = $scored->filter(fn ($r) => $r->percentage < 50)->map(fn ($r) => [
+            'student_id' => $r->student_id,
+            'student_name' => $r->student?->full_name,
+            'reg_no' => $r->student?->reg_no,
+            'class' => $r->schoolClass?->name,
+            'subject' => $r->subject?->name,
+            'percentage' => $r->percentage,
+        ])->all();
+
+        // Performance by class
+        $byClass = $examination->classes->map(function (SchoolClass $class) use ($scored, $subjectIds) {
+            $classResults = $scored->filter(fn ($r) => $r->class_id === $class->id);
+            return [
+                'id' => $class->id,
+                'name' => $class->name,
+                'code' => $class->code,
+                'students' => $class->students()->where('status', 'active')->count(),
+                'average' => $classResults->isEmpty() ? 0 : round($classResults->avg(fn ($r) => $r->percentage), 1),
+                'pass_rate' => $classResults->isEmpty() ? 0 : round(
+                    ($classResults->filter(fn ($r) => $r->percentage >= 50)->count() / $classResults->count()) * 100,
+                    1
+                ),
+                'highest' => $classResults->isEmpty() ? null : round($classResults->max(fn ($r) => $r->percentage), 1),
+                'lowest' => $classResults->isEmpty() ? null : round($classResults->min(fn ($r) => $r->percentage), 1),
+            ];
+        })->all();
+
+        // Performance by subject
+        $bySubject = $examination->subjects->map(function (Subject $subject) use ($scored) {
+            $subjectResults = $scored->filter(fn ($r) => $r->subject_id === $subject->id);
+            return [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'code' => $subject->code,
+                'max_score' => (float) ($subject->pivot->max_score ?? 0),
+                'average' => $subjectResults->isEmpty() ? 0 : round($subjectResults->avg(fn ($r) => $r->percentage), 1),
+                'pass_rate' => $subjectResults->isEmpty() ? 0 : round(
+                    ($subjectResults->filter(fn ($r) => $r->percentage >= 50)->count() / $subjectResults->count()) * 100,
+                    1
+                ),
+                'students' => $subjectResults->count(),
+            ];
+        })->all();
+
+        // Individual student results
+        $studentResults = $results->groupBy('student_id')->map(function ($group, $studentId) {
+            $first = $group->first();
+            return [
+                'student_id' => $studentId,
+                'student_name' => $first->student?->full_name,
+                'reg_no' => $first->student?->reg_no,
+                'class' => $first->schoolClass?->name,
+                'subjects' => $group->map(fn ($r) => [
+                    'subject' => $r->subject?->name,
+                    'score' => (float) $r->score,
+                    'max_score' => (float) $r->max_score,
+                    'percentage' => $r->percentage,
+                    'status' => $r->status,
+                ])->all(),
+                'average' => $group->isEmpty() ? 0 : round($group->avg(fn ($r) => $r->percentage), 1),
+            ];
+        })->values()->all();
+
+        return Inertia::render('Examinations/Analytics', [
+            'examination' => [
+                'id' => $examination->id,
+                'name' => $examination->name,
+                'academic_year' => $examination->academicYear?->name,
+                'term' => $examination->term?->name,
+                'status' => $examination->status,
+            ],
+            'summary' => [
+                'total_students' => Student::whereIn('class_id', $classIds)->where('status', 'active')->count(),
+                'results_recorded' => $scored->count(),
+                'overall_average' => $overallAverage,
+                'pass_rate' => $passRate,
+                'highest' => $highest ? [
+                    'student' => $highest->student?->full_name,
+                    'subject' => $highest->subject?->name,
+                    'percentage' => $highest->percentage,
+                ] : null,
+                'lowest' => $lowest ? [
+                    'student' => $lowest->student?->full_name,
+                    'subject' => $lowest->subject?->name,
+                    'percentage' => $lowest->percentage,
+                ] : null,
+            ],
+            'byClass' => $byClass,
+            'bySubject' => $bySubject,
+            'gradeDistribution' => $gradeDistribution,
+            'needsSupport' => $needsSupport,
+            'studentResults' => $studentResults,
+        ]);
+    }
+
     public function approve(Request $request, Examination $examination): RedirectResponse
     {
         abort_unless(
@@ -406,6 +554,28 @@ class ExaminationController extends Controller
             return back()->with('error', 'Only draft examinations can be published.');
         }
 
+        // Validation: a publishable examination must be complete and well-formed.
+        if ($examination->classes->isEmpty()) {
+            return back()->with('error', 'Cannot publish: assign at least one class.');
+        }
+
+        if ($examination->subjects->isEmpty()) {
+            return back()->with('error', 'Cannot publish: assign at least one subject.');
+        }
+
+        foreach ($examination->subjects as $subject) {
+            $maxScore = (float) ($subject->pivot->max_score ?? 0);
+            if (! is_numeric($maxScore) || $maxScore <= 0) {
+                return back()->with('error', 'Cannot publish: every subject must have a valid maximum score.');
+            }
+        }
+
+        $term = $examination->term;
+        $year = $examination->academicYear;
+        if (! $year || ! $term || (int) $term->academic_year_id !== (int) $year->id) {
+            return back()->with('error', 'Cannot publish: the term must belong to the selected academic year.');
+        }
+
         $examination->update(['status' => 'published']);
 
         AuditLog::record(
@@ -416,6 +586,30 @@ class ExaminationController extends Controller
         );
 
         return back()->with('success', 'Examination published.');
+    }
+
+    /** Reopen a published examination, returning it to draft (Head of School / Admin only). */
+    public function reopen(Request $request, Examination $examination): RedirectResponse
+    {
+        abort_unless(
+            $request->user()->hasAnyRole([UserRole::HeadOfSchool, UserRole::Admin]),
+            403
+        );
+
+        if (! $examination->reopenable()) {
+            return back()->with('error', 'Only published examinations without submitted or approved results can be reopened.');
+        }
+
+        $examination->update(['status' => 'draft']);
+
+        AuditLog::record(
+            $request->user(),
+            'examination.reopened',
+            "Reopened examination \"{$examination->name}\" to draft",
+            $examination
+        );
+
+        return back()->with('success', 'Examination returned to draft.');
     }
 
     /** Close an examination (Head of School / Admin only). No further marks accepted. */

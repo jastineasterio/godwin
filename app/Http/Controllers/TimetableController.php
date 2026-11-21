@@ -68,11 +68,11 @@ class TimetableController extends Controller
             ]);
         }
 
-        if ($user->isTeacher()) {
+        if ($user->hasAnyRole([UserRole::Teacher])) {
             $query->where('teacher_id', $user->id);
         }
 
-        if ($classId && !$user->isTeacher()) {
+        if ($classId && !$user->hasAnyRole([UserRole::Teacher])) {
             $query->where('class_id', $classId);
         }
 
@@ -256,7 +256,7 @@ class TimetableController extends Controller
             'teacher_id' => $t->teacher_id,
             'teacher_name' => $t->teacher?->name ?? '—',
             'day' => $t->day,
-            'day_label' => \App\Enums\TimetableDay::tryFrom($t->day)?->label() ?? ucfirst($t->day),
+            'day_label' => $t->day?->label() ?? ucfirst($t->day?->value ?? ''),
             'start_time' => $t->start_time,
             'end_time' => $t->end_time,
             'room' => $t->room,

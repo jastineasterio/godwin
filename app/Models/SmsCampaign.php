@@ -48,6 +48,6 @@ class SmsCampaign extends Model
 
     public function messages(): HasMany
     {
-        return $this->hasMany(SmsMessage::class);
+        return $this->hasMany(SmsMessage::class, 'campaign_id');
     }
 }

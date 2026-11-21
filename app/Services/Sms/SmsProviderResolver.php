@@ -100,6 +100,7 @@ class SmsProviderResolver
 
         $providerConfig = [
             'base_url' => $config->base_url,
+            'auth_header_name' => $config->auth_header_name ?? 'X-API-Key',
             'api_key' => $config->decryptedApiKey(),
             'api_secret' => $config->decryptedApiSecret(),
             'sender_id' => $config->sender_id,

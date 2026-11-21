@@ -31,6 +31,7 @@ class Assessment extends Model
         'remarks',
         'recorded_by',
         'obtained_at',
+        'submitted_at',
     ];
 
     /** @return array<string, string> */
@@ -42,6 +43,7 @@ class Assessment extends Model
             'max_score' => 'decimal:2',
             'obtained_at' => 'date',
             'status' => 'string',
+            'submitted_at' => 'datetime',
         ];
     }
 

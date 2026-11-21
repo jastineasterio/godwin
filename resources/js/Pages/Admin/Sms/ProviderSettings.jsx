@@ -4,7 +4,7 @@ import { Button, Card, Input, Label, Badge, Switch, Textarea, Flash } from '@/Co
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Plus, Phone, Shield, Info, Key, Link, RefreshCw } from 'lucide-react';
 
-export default function SmsProviderSettings({ configs, active_provider, capabilities, available_providers }) {
+export default function SmsProviderSettings({ configs, active_provider, capabilities, available_providers, routes }) {
     const { flash } = usePage().props;
     const [editingId, setEditingId] = useState(null);
 
@@ -17,7 +17,7 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
         api_secret: '',
         username: '',
         password: '',
-        sender_id: '',
+        sender_id: 'DARSMS',
         is_active: false,
         timeout_seconds: 30,
     });
@@ -25,10 +25,20 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
     const handleSave = (e) => {
         e.preventDefault();
 
+        const target = editingId ? configs.find((c) => c.id === editingId) : null;
+        const url = editingId && target ? target.urls?.update : routes?.store;
+
+        if (!url) return;
+
+        const options = {
+            onSuccess: () => setEditingId(null),
+            onError: () => {},
+        };
+
         if (editingId) {
-            form.put(route('sms.admin.providers.update', editingId)).then(() => setEditingId(null));
+            form.put(url, options);
         } else {
-            form.post(route('sms.admin.providers.store')).then(() => setEditingId(null));
+            form.post(url, options);
         }
     };
 
@@ -47,17 +57,39 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
         });
     };
 
-    const handleToggle = (id) => {
-        const config = configs.find(c => c.id === id);
-        fetch(route('sms.admin.providers.status', config), {
-            method: 'PATCH',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-            body: JSON.stringify({ is_active: !config.is_active }),
-        }).then(() => window.location.reload());
+    const handleToggle = async (id) => {
+        const config = configs.find((c) => c.id === id);
+        if (!config) return;
+
+        const desired = !config.is_active;
+        const token = document.querySelector('meta[name="csrf-token"]').content;
+
+        try {
+            const response = await fetch(config.urls?.status, {
+                method: 'PATCH',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': token,
+                },
+                body: JSON.stringify({ is_active: desired }),
+            });
+
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                const messages = Object.values(body.errors ?? {}).flat();
+                throw new Error(messages.length ? messages.join(' ') : (body.message || 'Failed to update provider status.'));
+            }
+
+            window.location.reload();
+        } catch (error) {
+            alert(error.message || 'Failed to update provider status. Please try again.');
+        }
     };
 
     const handleTestConnection = () => {
-        fetch(route('sms.admin.test-connection'), {
+        fetch(routes?.test_connection, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
         }).then(async (r) => {
@@ -69,7 +101,8 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
 
     const handleDelete = (id) => {
         if (!confirm('Are you sure you want to delete this provider configuration?')) return;
-        fetch(route('sms.admin.providers.destroy', id), {
+        const config = configs.find((c) => c.id === id);
+        fetch(config?.urls?.destroy, {
             method: 'DELETE',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
         }).then(() => window.location.reload());
@@ -202,24 +235,29 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
                     <div className="col-span-2 sm:col-span-1">
                         <Label>Provider Name</Label>
                         <Input value={form.name} onChange={(e) => form.setData('name', e.target.value)} placeholder="e.g. DARSMS Production" />
+                        {form.errors.name && <p className="mt-1 text-xs text-rose-600">{form.errors.name}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <Label>Provider Type</Label>
                         <Input value={form.provider_type} onChange={(e) => form.setData('provider_type', e.target.value)} placeholder="darsms" />
+                        {form.errors.provider_type && <p className="mt-1 text-xs text-rose-600">{form.errors.provider_type}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-2">
                         <Label>Base URL</Label>
                         <Input value={form.base_url} onChange={(e) => form.setData('base_url', e.target.value)} placeholder="https://dev.darsms.co.tz/api/v1" />
                         <p className="mt-1 text-xs text-slate-500">Configurable per provider. Ask your SMS provider for the production URL.</p>
+                        {form.errors.base_url && <p className="mt-1 text-xs text-rose-600">{form.errors.base_url}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <Label>Auth Header Name</Label>
                         <Input value={form.auth_header_name} onChange={(e) => form.setData('auth_header_name', e.target.value)} placeholder="X-API-Key" />
+                        {form.errors.auth_header_name && <p className="mt-1 text-xs text-rose-600">{form.errors.auth_header_name}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-2">
                         <Label>API Key</Label>
                         <Input type="password" value={form.api_key} onChange={(e) => form.setData('api_key', e.target.value)} placeholder="••••••••" />
                         <p className="mt-1 text-xs text-slate-500">Stored encrypted. Never exposed to frontend.</p>
+                        {form.errors.api_key && <p className="mt-1 text-xs text-rose-600">{form.errors.api_key}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <Label>API Secret (optional)</Label>
@@ -237,10 +275,12 @@ export default function SmsProviderSettings({ configs, active_provider, capabili
                     <div className="col-span-2 sm:col-span-1">
                         <Label>Default Sender ID</Label>
                         <Input value={form.sender_id} onChange={(e) => form.setData('sender_id', e.target.value)} placeholder="DARSMS" />
+                        {form.errors.sender_id && <p className="mt-1 text-xs text-rose-600">{form.errors.sender_id}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <Label>Timeout (seconds)</Label>
                         <Input type="number" value={form.timeout_seconds} onChange={(e) => form.setData('timeout_seconds', parseInt(e.target.value) || 30)} placeholder="30" />
+                        {form.errors.timeout_seconds && <p className="mt-1 text-xs text-rose-600">{form.errors.timeout_seconds}</p>}
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <Label className="flex items-center gap-2">

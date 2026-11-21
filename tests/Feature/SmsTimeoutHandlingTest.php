@@ -262,6 +262,96 @@ class SmsTimeoutHandlingTest extends TestCase
         $this->assertEquals('not_resendable', $result['code']);
     }
 
+    // ------------------------------------------------------------------
+    // DARSMS send-response parsing (the original failure was an
+    // "Undefined array key messageIds" ErrorException thrown while parsing
+    // a successful HTTP 202 response that lacked a messageIds key).
+    // ------------------------------------------------------------------
+
+    /** @test */
+    public function accepted_202_without_message_ids_does_not_throw_and_is_queued(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'success' => true,
+                'message' => 'Accepted',
+                'data' => ['batchId' => 'batch_no_ids', 'queued' => 1, 'senderId' => 'DARSMS'],
+                // deliberately no messageIds / messageId key
+            ], 202),
+        ]);
+
+        $provider = new DarsmsProvider([
+            'base_url' => 'https://test.darsms.local/api/v1',
+            'api_key' => 'no-ids-key',
+        ]);
+
+        $result = $provider->send('255712345678', 'No message id key');
+
+        $this->assertTrue($result['success']);
+        $this->assertNull($result['messageId']);
+        $this->assertEquals([], $result['messageIds']);
+        $this->assertEquals('batch_no_ids', $result['batchId']);
+        $this->assertEquals(1, $result['queued']);
+        $this->assertEquals('QUEUED', $result['providerStatus']);
+        $this->assertFalse($result['ambiguous'] ?? false);
+    }
+
+    /** @test */
+    public function send_bulk_preserves_duplicates_removed_and_message_ids(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'success' => true,
+                'message' => 'Accepted',
+                'data' => [
+                    'messageIds' => ['msg_one', 'msg_two'],
+                    'batchId' => 'batch_bulk',
+                    'queued' => 2,
+                    'duplicatesRemoved' => 1,
+                    'senderId' => 'DARSMS',
+                ],
+            ], 202),
+        ]);
+
+        $provider = new DarsmsProvider([
+            'base_url' => 'https://test.darsms.local/api/v1',
+            'api_key' => 'bulk-key',
+        ]);
+
+        $result = $provider->sendBulk(['255712345678', '255712345679'], 'Bulk message');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('msg_one', $result['messageId']);
+        $this->assertEquals(['msg_one', 'msg_two'], $result['messageIds']);
+        $this->assertEquals('batch_bulk', $result['batchId']);
+        $this->assertEquals(2, $result['queued']);
+        $this->assertEquals(1, $result['duplicatesRemoved']);
+        $this->assertEquals('QUEUED', $result['providerStatus']);
+    }
+
+    /** @test */
+    public function message_id_is_mapped_from_array_or_singular_key(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'success' => true,
+                'message' => 'Accepted',
+                'data' => ['messageId' => 'msg_singular', 'batchId' => 'batch_single'],
+            ], 202),
+        ]);
+
+        $provider = new DarsmsProvider([
+            'base_url' => 'https://test.darsms.local/api/v1',
+            'api_key' => 'single-key',
+        ]);
+
+        $result = $provider->send('255712345678', 'Singular message id');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('msg_singular', $result['messageId']);
+        $this->assertEquals('batch_single', $result['batchId']);
+    }
+
     protected function seedProvider(): void
     {
         $config = SmsProviderConfig::create([

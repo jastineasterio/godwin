@@ -10,6 +10,7 @@ use App\Models\Examination;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Subject;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class TeacherResultController extends Controller
     {
         $teacher = $request->user();
 
-        $classIds = $teacher->classesTaught()->pluck('classes.id')->all();
+        $classIds = $teacher->assignedClassIds();
 
         $examinations = Examination::published()
             ->whereHas('classes', function ($q) use ($classIds) {
@@ -80,12 +81,132 @@ class TeacherResultController extends Controller
         ]);
     }
 
+    /** Step 1: classes the teacher is authorized to record marks for. */
+    public function classes(Request $request): Response
+    {
+        $teacher = $request->user();
+
+        $classIds = $teacher->assignedClassIds();
+
+        $classes = SchoolClass::whereIn('id', $classIds)
+            ->active()
+            ->withCount(['students' => fn ($q) => $q->where('status', 'active')])
+            ->ordered()
+            ->get(['id', 'name', 'code', 'level', 'capacity']);
+
+        return Inertia::render('Teacher/Marks/SelectClass', [
+            'classes' => $classes->map(fn (SchoolClass $c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'code' => $c->code,
+                'level' => $c->level?->value,
+                'students_count' => (int) $c->students_count,
+            ])->all(),
+        ]);
+    }
+
+    /** Step 2: subjects the teacher is assigned to teach in the given class. */
+    public function subjects(Request $request): Response
+    {
+        $teacher = $request->user();
+
+        $classIds = $teacher->assignedClassIds();
+        $classId = (int) $request->query('class_id');
+
+        abort_unless(
+            in_array($classId, $classIds, true),
+            403,
+            'You are not assigned to this class.'
+        );
+
+        $class = SchoolClass::find($classId);
+        abort_unless($class, 404, 'Class not found.');
+
+        $subjects = Subject::where('is_active', true)
+            ->join('class_subject', 'class_subject.subject_id', '=', 'subjects.id')
+            ->where('class_subject.class_id', $classId)
+            ->where('class_subject.teacher_id', $teacher->id)
+            ->orderBy('subjects.name')
+            ->get(['subjects.id', 'subjects.name', 'subjects.code']);
+
+        return Inertia::render('Teacher/Marks/SelectSubject', [
+            'class' => [
+                'id' => $class->id,
+                'name' => $class->name,
+                'code' => $class->code,
+            ],
+            'subjects' => $subjects->all(),
+        ]);
+    }
+
+    /** Step 3: published examinations for the selected class and subject. */
+    public function examinations(Request $request): Response
+    {
+        $teacher = $request->user();
+
+        $classIds = $teacher->assignedClassIds();
+        $classId = (int) $request->query('class_id');
+        $subjectId = (int) $request->query('subject_id');
+
+        abort_unless(
+            in_array($classId, $classIds, true),
+            403,
+            'You are not assigned to this class.'
+        );
+
+        abort_unless(
+            $this->teachesSubjectInClass($teacher, $classId, $subjectId),
+            403,
+            'You are not assigned to teach this subject in this class.'
+        );
+
+        $class = SchoolClass::find($classId);
+        $subject = Subject::find($subjectId);
+
+        abort_unless($class && $subject, 404, 'Class or subject not found.');
+
+        $examinations = Examination::published()
+            ->whereHas('classes', fn ($q) => $q->where('classes.id', $classId))
+            ->whereHas('subjects', fn ($q) => $q->where('subjects.id', $subjectId))
+            ->with(['academicYear', 'term'])
+            ->latest()
+            ->get()
+            ->map(fn (Examination $exam) => [
+                'id' => $exam->id,
+                'name' => $exam->name,
+                'academic_year' => $exam->academicYear?->name,
+                'term' => $exam->term?->name,
+                'status' => $exam->status,
+            ]);
+
+        return Inertia::render('Teacher/Marks/SelectExamination', [
+            'class' => [
+                'id' => $class->id,
+                'name' => $class->name,
+                'code' => $class->code,
+            ],
+            'subject' => [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'code' => $subject->code,
+            ],
+            'examinations' => $examinations->all(),
+        ]);
+    }
+
     /** Load eligible students and subjects for result entry. */
     public function results(Request $request, Examination $examination): Response
     {
         $teacher = $request->user();
 
-        $classIds = $teacher->classesTaught()->pluck('classes.id')->all();
+        $classIds = $teacher->assignedClassIds();
+
+        // Only published, accessible examinations may be recorded against.
+        abort_unless(
+            $examination->status === 'published',
+            403,
+            'Results can only be recorded for a published examination.'
+        );
 
         // Validate teacher has access to this examination's classes
         abort_unless(
@@ -103,9 +224,17 @@ class TeacherResultController extends Controller
             'You are not assigned to this class.'
         );
 
+        // The teacher must be assigned to teach this subject in this class.
+        abort_unless(
+            $subjectId > 0 && $this->teachesSubjectInClass($teacher, $classId, $subjectId),
+            403,
+            'You are not assigned to teach this subject in this class.'
+        );
+
         // Get max_score for this subject in this examination
         $subjectConfig = $examination->subjects->first(fn ($s) => $s->id === $subjectId);
-        $maxScore = $subjectConfig ? (float) $subjectConfig->pivot->max_score : 0;
+        abort_unless($subjectConfig, 403, 'This subject is not part of the examination.');
+        $maxScore = (float) $subjectConfig->pivot->max_score;
 
         // Load students in the class
         $students = Student::where('class_id', $classId)
@@ -117,8 +246,7 @@ class TeacherResultController extends Controller
         $existingResults = Assessment::forExamination($examination->id)
             ->where('class_id', $classId)
             ->when($subjectId, fn ($q) => $q->where('subject_id', $subjectId))
-            ->get()
-            ->keyBy(fn (Assessment $a) => "{$a->student_id}-{$a->subject_id}");
+            ->get();
 
         return Inertia::render('Teacher/ResultEntry', [
             'examination' => [
@@ -168,7 +296,7 @@ class TeacherResultController extends Controller
     {
         $teacher = $request->user();
 
-        $classIds = $teacher->classesTaught()->pluck('classes.id')->all();
+        $classIds = $teacher->assignedClassIds();
 
         $data = $request->validate([
             'class_id' => ['required', 'exists:classes,id'],
@@ -185,9 +313,21 @@ class TeacherResultController extends Controller
             'You are not assigned to this class.'
         );
 
+        // The teacher must be assigned to teach this subject in this class.
+        abort_unless(
+            $this->teachesSubjectInClass($teacher, $data['class_id'], $data['subject_id']),
+            403,
+            'You are not assigned to teach this subject in this class.'
+        );
+
         if ($examination->status === 'closed') {
             abort(403, 'Results cannot be saved for a closed examination.');
         }
+
+        // The subject must be part of this examination.
+        $subjectConfig = $examination->subjects->first(fn ($s) => $s->id === $data['subject_id']);
+        abort_unless($subjectConfig, 403, 'This subject is not part of the examination.');
+        $maxScore = (float) $subjectConfig->pivot->max_score;
 
         // Validate student is in the class
         $studentIds = Student::where('class_id', $data['class_id'])
@@ -201,10 +341,6 @@ class TeacherResultController extends Controller
                 "Student {$result['student_id']} is not in class {$data['class_id']}."
             );
         }
-
-        // Validate max score
-        $subjectConfig = $examination->subjects->first(fn ($s) => $s->id === $data['subject_id']);
-        $maxScore = $subjectConfig ? (float) $subjectConfig->pivot->max_score : 0;
 
         foreach ($data['results'] as $result) {
             if ((float) $result['score'] > $maxScore) {
@@ -222,8 +358,9 @@ class TeacherResultController extends Controller
                     ->where('subject_id', $data['subject_id'])
                     ->first();
 
-                if ($existing && $existing->status === 'approved') {
-                    abort(403, "Approved results for student {$result['student_id']} cannot be modified.");
+                // Submitted or approved results are locked; only draft/returned may be revised.
+                if ($existing && in_array($existing->status, ['submitted', 'approved'], true)) {
+                    abort(403, "Results for student {$result['student_id']} are {$existing->status} and cannot be modified.");
                 }
 
                 Assessment::updateOrCreate(
@@ -263,7 +400,7 @@ class TeacherResultController extends Controller
     {
         $teacher = $request->user();
 
-        $classIds = $teacher->classesTaught()->pluck('classes.id')->all();
+        $classIds = $teacher->assignedClassIds();
 
         $data = $request->validate([
             'class_id' => ['required', 'exists:classes,id'],
@@ -276,16 +413,29 @@ class TeacherResultController extends Controller
             'You are not assigned to this class.'
         );
 
+        abort_unless(
+            $this->teachesSubjectInClass($teacher, $data['class_id'], $data['subject_id']),
+            403,
+            'You are not assigned to teach this subject in this class.'
+        );
+
         if ($examination->status === 'closed') {
             abort(403, 'Results cannot be submitted for a closed examination.');
         }
+
+        $subjectConfig = $examination->subjects->first(fn ($s) => $s->id === $data['subject_id']);
+        abort_unless($subjectConfig, 403, 'This subject is not part of the examination.');
 
         $updated = Assessment::forExamination($examination->id)
             ->where('status', 'draft')
             ->where('class_id', $data['class_id'])
             ->where('subject_id', $data['subject_id'])
             ->where('recorded_by', $teacher->id)
-            ->update(['status' => 'submitted']);
+            ->update(['status' => 'submitted', 'submitted_at' => now()]);
+
+        if ($updated === 0) {
+            return back()->with('error', 'No draft results to submit (they may already be submitted).');
+        }
 
         AuditLog::record(
             $teacher,
@@ -295,5 +445,16 @@ class TeacherResultController extends Controller
         );
 
         return back()->with('success', "Submitted {$updated} result(s) for review.");
+    }
+
+    /** True when the teacher is assigned to teach the subject in the given class. */
+    protected function teachesSubjectInClass(User $teacher, int $classId, int $subjectId): bool
+    {
+        return \App\Models\Subject::where('is_active', true)
+            ->join('class_subject', 'class_subject.subject_id', '=', 'subjects.id')
+            ->where('class_subject.class_id', $classId)
+            ->where('class_subject.teacher_id', $teacher->id)
+            ->where('subjects.id', $subjectId)
+            ->exists();
     }
 }

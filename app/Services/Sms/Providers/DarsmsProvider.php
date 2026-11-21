@@ -71,6 +71,7 @@ class DarsmsProvider implements SmsProviderInterface
     {
         $this->config = array_merge([
             'base_url' => self::DEFAULT_BASE_URL,
+            'auth_header_name' => 'X-API-Key',
             'api_key' => null,
             'api_secret' => null,
             'sender_id' => null,
@@ -568,7 +569,7 @@ class DarsmsProvider implements SmsProviderInterface
         try {
             $response = $this->http
                 ->withHeaders([
-                    'X-API-Key' => $this->config['api_key'],
+                    $this->config['auth_header_name'] => $this->config['api_key'],
                     'Accept' => 'application/json',
                 ])
                 ->get($this->baseUrl().$path, $query);
@@ -610,7 +611,7 @@ class DarsmsProvider implements SmsProviderInterface
         try {
             $response = $this->http
                 ->withHeaders([
-                    'X-API-Key' => $this->config['api_key'],
+                    $this->config['auth_header_name'] => $this->config['api_key'],
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
                 ])
@@ -660,7 +661,10 @@ class DarsmsProvider implements SmsProviderInterface
     /**
      * Parse a send response into a normalized result.
      *
-     * HTTP 202 means accepted/queued by the provider — NOT delivered.
+     * HTTP 202 means accepted/queued by the provider — NOT delivered. The
+     * response body may use either a single `messageId` or a `messageIds`
+     * array. Both are handled without throwing, so an accepted batch is
+     * never misreported as a failure because a response key is missing.
      */
     protected function parseSendResponse(array $result, string $recipients): array
     {
@@ -669,7 +673,11 @@ class DarsmsProvider implements SmsProviderInterface
                 'success' => false,
                 'recipients' => $recipients,
                 'messageId' => null,
+                'messageIds' => [],
                 'batchId' => null,
+                'queued' => 0,
+                'duplicatesRemoved' => 0,
+                'senderId' => null,
                 'providerStatus' => null,
                 'error' => $result['message'] ?? 'Send failed.',
                 'status_code' => $result['status_code'] ?? null,
@@ -681,15 +689,23 @@ class DarsmsProvider implements SmsProviderInterface
         }
 
         $data = $result['data'] ?? [];
+        if (! is_array($data)) {
+            $data = [];
+        }
+
+        $messageIds = is_array($data['messageIds'] ?? null) ? $data['messageIds'] : [];
+        if (empty($messageIds) && isset($data['messageId'])) {
+            $messageIds = [$data['messageId']];
+        }
 
         return [
             'success' => true,
             'recipients' => $recipients,
-            'messageId' => $data['messageIds'][0] ?? $data['messageId'] ?? null,
-            'messageIds' => is_array($data['messageIds'] ?? []) ? $data['messageIds'] : [],
+            'messageId' => $messageIds[0] ?? null,
+            'messageIds' => $messageIds,
             'batchId' => $data['batchId'] ?? null,
-            'queued' => $data['queued'] ?? 0,
-            'duplicatesRemoved' => $data['duplicatesRemoved'] ?? 0,
+            'queued' => (int) ($data['queued'] ?? 0),
+            'duplicatesRemoved' => (int) ($data['duplicatesRemoved'] ?? 0),
             'senderId' => $data['senderId'] ?? null,
             'providerStatus' => self::STATUS_QUEUED,
             'error' => null,

@@ -184,4 +184,155 @@ class SmsTemplateControllerTest extends TestCase
         $this->assertEquals($creator->name, $templates[0]['created_by']);
         $this->assertNotNull($templates[0]['created_at']);
     }
+
+    /** @test */
+    public function head_of_school_can_create_template(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+
+        $response = $this->actingAs($user)
+            ->postJson('/sms/templates', [
+                'name' => 'Fee Reminder',
+                'category' => 'fee_reminders',
+                'template' => 'Dear {parent_name}, {student_name} has a balance of {amount}.',
+                'is_active' => true,
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertTrue($response->json('success'));
+        $this->assertEquals('Fee Reminder', $response->json('template.name'));
+        $this->assertTrue($response->json('template.is_active'));
+
+        $this->assertDatabaseHas('sms_templates', [
+            'name' => 'Fee Reminder',
+            'category' => 'fee_reminders',
+            'template' => 'Dear {parent_name}, {student_name} has a balance of {amount}.',
+            'is_active' => true,
+        ]);
+    }
+
+    /** @test */
+    public function create_template_validates_required_fields(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+
+        $response = $this->actingAs($user)
+            ->postJson('/sms/templates', [
+                'name' => '',
+                'category' => '',
+                'template' => '',
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertArrayHasKey('errors', $response->json());
+        $this->assertArrayHasKey('name', $response->json('errors'));
+        $this->assertArrayHasKey('category', $response->json('errors'));
+        $this->assertArrayHasKey('template', $response->json('errors'));
+    }
+
+    /** @test */
+    public function create_template_rejects_invalid_variables(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+
+        $response = $this->actingAs($user)
+            ->postJson('/sms/templates', [
+                'name' => 'Bad Template',
+                'category' => 'general',
+                'template' => 'Hello {unknown_var} and {parent_name}',
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertFalse($response->json('success'));
+        $this->assertArrayHasKey('template', $response->json('errors'));
+    }
+
+    /** @test */
+    public function head_of_school_can_update_template(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+        $template = $this->makeTemplate(['name' => 'Original', 'created_by' => $user->id]);
+
+        $response = $this->actingAs($user)
+            ->putJson('/sms/templates/'.$template->id, [
+                'name' => 'Renamed',
+                'category' => 'announcements',
+                'template' => 'Updated {school_name}',
+                'is_active' => false,
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('success'));
+        $this->assertEquals('Renamed', $response->json('template.name'));
+        $this->assertFalse($response->json('template.is_active'));
+
+        $this->assertDatabaseHas('sms_templates', [
+            'id' => $template->id,
+            'name' => 'Renamed',
+            'is_active' => false,
+        ]);
+    }
+
+    /** @test */
+    public function head_of_school_can_toggle_template(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+        $template = $this->makeTemplate(['is_active' => true]);
+
+        $response = $this->actingAs($user)
+            ->patchJson('/sms/templates/'.$template->id.'/toggle');
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('success'));
+        $this->assertFalse($response->json('template.is_active'));
+
+        // Toggle back on.
+        $this->actingAs($user)
+            ->patchJson('/sms/templates/'.$template->id.'/toggle');
+        $this->assertDatabaseHas('sms_templates', [
+            'id' => $template->id,
+            'is_active' => true,
+        ]);
+    }
+
+    /** @test */
+    public function head_of_school_can_delete_template(): void
+    {
+        $user = $this->makeUser(UserRole::HeadOfSchool);
+        $template = $this->makeTemplate();
+
+        $response = $this->actingAs($user)
+            ->deleteJson('/sms/templates/'.$template->id);
+
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('success'));
+        $this->assertDatabaseHas('sms_templates', [
+            'id' => $template->id,
+        ]);
+        $this->assertNotNull($template->refresh()->deleted_at);
+    }
+
+    /** @test */
+    public function teacher_cannot_manage_templates(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+
+        // The role middleware redirects unauthorised roles (existing behaviour).
+        $this->actingAs($teacher)
+            ->post('/sms/templates', [
+                'name' => 'X',
+                'category' => 'general',
+                'template' => 'Hi',
+            ])
+            ->assertStatus(302);
+
+        $template = $this->makeTemplate();
+        $this->actingAs($teacher)
+            ->patch('/sms/templates/'.$template->id.'/toggle')
+            ->assertStatus(302);
+
+        $this->actingAs($teacher)
+            ->delete('/sms/templates/'.$template->id)
+            ->assertStatus(302);
+    }
 }

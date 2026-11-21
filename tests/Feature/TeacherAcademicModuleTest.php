@@ -238,6 +238,148 @@ class TeacherAcademicModuleTest extends TestCase
             );
     }
 
+    public function test_teacher_cannot_see_draft_examinations(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $draftExam = Examination::create([
+            'name' => 'Draft Exam', 'academic_year_id' => $this->makeAcademicYear()->id,
+            'term_id' => $this->makeTerm(AcademicYear::first())->id, 'status' => 'draft',
+        ]);
+        $draftExam->classes()->attach($class->id);
+        $draftExam->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($teacher)
+            ->get('/teacher/examinations')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('examinations', fn ($exams) => count($exams) === 0)
+            );
+    }
+
+    public function test_authorized_teacher_can_access_own_examination_results(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $student = $this->makeStudent($class, 'Amina');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $exam = Examination::create([
+            'name' => 'Mid Term', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'published',
+        ]);
+        $exam->classes()->attach($class->id);
+        $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.results', $exam) . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('examination.name', 'Mid Term')
+            );
+    }
+
+    public function test_results_entry_returns_students_and_existing_draft_marks(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $student = $this->makeStudent($class, 'Amina');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $exam = Examination::create([
+            'name' => 'Mid Term', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'published',
+        ]);
+        $exam->classes()->attach($class->id);
+        $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
+
+        Assessment::create([
+            'examination_id' => $exam->id, 'student_id' => $student->id,
+            'class_id' => $class->id, 'subject_id' => $subject->id, 'term_id' => $term->id,
+            'title' => 'Mid Term - Phonics', 'type' => 'exam', 'score' => 15,
+            'max_score' => 20, 'recorded_by' => $teacher->id, 'status' => 'draft',
+            'remarks' => 'Good work',
+        ]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.results', $exam) . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/ResultEntry')
+                ->where('examination.name', 'Mid Term')
+                ->where('class.name', 'KG1 Sunshine')
+                ->where('subject.name', 'Phonics')
+                ->where('max_score', 20)
+                ->where('students', fn ($students) => is_array($students)
+                    && count($students) === 1
+                    && $students[0]['name'] === 'Amina Juma'
+                )
+                ->where('existingResults', fn ($existing) => is_array($existing)
+                    && count($existing) === 1
+                    && $existing[0]['score'] === 15
+                    && $existing[0]['status'] === 'draft'
+                    && $existing[0]['remarks'] === 'Good work'
+                )
+            );
+    }
+
+    public function test_unauthorized_teacher_cannot_access_another_teachers_examination_marks(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $otherTeacher = $this->makeUser(UserRole::Teacher, ['email' => 'other@godwin.ac.tz']);
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+
+        $ownClass = $this->makeClass($teacher, 'KG1-A');
+        $otherClass = $this->makeClass($otherTeacher, 'NUR-B');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $otherExam = Examination::create([
+            'name' => 'Other Exam', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'published',
+        ]);
+        $otherExam->classes()->attach($otherClass->id);
+        $otherExam->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.results', $otherExam) . '?class_id=' . $otherClass->id . '&subject_id=' . $subject->id)
+            ->assertForbidden();
+    }
+
+    public function test_head_of_school_can_monitor_submission_progress(): void
+    {
+        $hos = $this->makeUser(UserRole::HeadOfSchool);
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+        $class = $this->makeClass(null, 'KG1-A');
+        $student = $this->makeStudent($class, 'Amina');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $exam = Examination::create([
+            'name' => 'Mid Term', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'published',
+        ]);
+        $exam->classes()->attach($class->id);
+        $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($hos)
+            ->get(route('examinations.progress', $exam))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('examination.name', 'Mid Term')
+                ->has('stats')
+                ->has('classProgress')
+            );
+    }
+
     /* ---------------- PHASE 3: Teacher Sees Assigned Classes ------------ */
 
     public function test_teacher_sees_only_assigned_classes(): void
@@ -274,6 +416,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         $this->actingAs($teacher)
             ->put("/teacher/examinations/{$exam->id}/results", [
@@ -315,6 +458,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         $this->actingAs($teacher)
             ->put("/teacher/examinations/{$exam->id}/results", [
@@ -375,6 +519,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         // First save should succeed
         $this->actingAs($teacher)
@@ -424,6 +569,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($ownClass->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $ownClass->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         $this->actingAs($teacher)
             ->put("/teacher/examinations/{$exam->id}/results", [
@@ -451,6 +597,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         // Create an approved result directly (simulating HoS approval)
         Assessment::create([
@@ -584,6 +731,7 @@ class TeacherAcademicModuleTest extends TestCase
         ]);
         $exam->classes()->attach($class->id);
         $exam->subjects()->attach($subject->id, ['max_score' => 20]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
 
         // Create a draft result
         $assessment = Assessment::create([
@@ -760,4 +908,173 @@ class TeacherAcademicModuleTest extends TestCase
             ->get("/students/{$student->id}/report-card")
             ->assertOk();
     }
+
+    /* ---------------- PHASE 14: Class-First Record Marks Workflow ------- */
+
+    public function test_teacher_sees_only_assigned_classes_for_marks(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $otherTeacher = $this->makeUser(UserRole::Teacher, ['email' => 'other@godwin.ac.tz']);
+
+        $ownClass = $this->makeClass($teacher, 'KG1-A');
+        $this->makeClass($otherTeacher, 'NUR-B');
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/Marks/SelectClass')
+                ->where('classes.0.name', 'KG1 Sunshine')
+                ->where('classes', fn ($classes) => count($classes) === 1)
+            );
+    }
+
+    public function test_teacher_sees_only_subjects_assigned_in_selected_class(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $otherTeacher = $this->makeUser(UserRole::Teacher, ['email' => 'other@godwin.ac.tz']);
+
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+
+        $ownClass = $this->makeClass($teacher, 'KG1-A');
+        $otherClass = $this->makeClass($otherTeacher, 'NUR-B');
+
+        $ownSubject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+        $otherSubject = Subject::create(['name' => 'Art', 'code' => 'ART', 'is_active' => true]);
+
+        // Teacher teaches Phonics in own class only
+        $ownClass->subjects()->attach($ownSubject->id, ['teacher_id' => $teacher->id]);
+        // Other teacher teaches Art in other class
+        $otherClass->subjects()->attach($otherSubject->id, ['teacher_id' => $otherTeacher->id]);
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/subjects?class_id=' . $ownClass->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/Marks/SelectSubject')
+                ->where('class.name', 'KG1 Sunshine')
+                ->where('subjects.0.name', 'Phonics')
+                ->where('subjects', fn ($subjects) => count($subjects) === 1)
+            );
+    }
+
+    public function test_teacher_cannot_access_subjects_for_unassigned_class(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $otherTeacher = $this->makeUser(UserRole::Teacher, ['email' => 'other@godwin.ac.tz']);
+
+        $ownClass = $this->makeClass($teacher, 'KG1-A');
+        $otherClass = $this->makeClass($otherTeacher, 'NUR-B');
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/subjects?class_id=' . $otherClass->id)
+            ->assertForbidden();
+    }
+
+    public function test_teacher_sees_only_published_examinations_for_class_and_subject(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
+
+        $published = Examination::create([
+            'name' => 'Published Exam', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'published',
+        ]);
+        $published->classes()->attach($class->id);
+        $published->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $draft = Examination::create([
+            'name' => 'Draft Exam', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'draft',
+        ]);
+        $draft->classes()->attach($class->id);
+        $draft->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/examinations' . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/Marks/SelectExamination')
+                ->where('examinations.0.name', 'Published Exam')
+                ->where('examinations', fn ($exams) => count($exams) === 1)
+            );
+    }
+
+    public function test_teacher_cannot_access_examinations_for_unassigned_subject(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $otherTeacher = $this->makeUser(UserRole::Teacher, ['email' => 'other@godwin.ac.tz']);
+
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/examinations' . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertForbidden();
+    }
+
+    public function test_empty_state_when_no_subjects_assigned_in_class(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $class = $this->makeClass($teacher, 'KG1-A');
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/subjects?class_id=' . $class->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/Marks/SelectSubject')
+                ->where('subjects', [])
+            );
+    }
+
+    public function test_empty_state_when_no_published_examinations(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+        $class->subjects()->attach($subject->id, ['teacher_id' => $teacher->id]);
+
+        $year = $this->makeAcademicYear();
+        $term = $this->makeTerm($year);
+        $draftExam = Examination::create([
+            'name' => 'Draft Exam', 'academic_year_id' => $year->id,
+            'term_id' => $term->id, 'status' => 'draft',
+        ]);
+        $draftExam->classes()->attach($class->id);
+        $draftExam->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($teacher)
+            ->get('/teacher/marks/examinations' . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Teacher/Marks/SelectExamination')
+                ->where('examinations', [])
+            );
+    }
+
+    public function test_results_only_accessible_for_published_examination(): void
+    {
+        $teacher = $this->makeUser(UserRole::Teacher);
+        $class = $this->makeClass($teacher, 'KG1-A');
+        $student = $this->makeStudent($class, 'Amina');
+        $subject = Subject::create(['name' => 'Phonics', 'code' => 'PHON', 'is_active' => true]);
+
+        $draftExam = Examination::create([
+            'name' => 'Draft Exam', 'academic_year_id' => $this->makeAcademicYear()->id,
+            'term_id' => $this->makeTerm(AcademicYear::first())->id, 'status' => 'draft',
+        ]);
+        $draftExam->classes()->attach($class->id);
+        $draftExam->subjects()->attach($subject->id, ['max_score' => 20]);
+
+        $this->actingAs($teacher)
+            ->get(route('teacher.results', $draftExam) . '?class_id=' . $class->id . '&subject_id=' . $subject->id)
+            ->assertForbidden();
+    }
 }
+

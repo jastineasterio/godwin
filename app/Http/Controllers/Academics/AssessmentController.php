@@ -14,6 +14,7 @@ use App\Models\Term;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -152,9 +153,30 @@ class AssessmentController extends Controller
         return redirect()->route('assessments.index')->with('success', 'Assessment updated.');
     }
 
-    public function destroy(Assessment $assessment): RedirectResponse
+    public function destroy(Request $request, Assessment $assessment): RedirectResponse
     {
-        $assessment->delete();
+        $user = $request->user();
+
+        abort_unless(
+            in_array($assessment->class_id, $this->allowedClassIds($user), true),
+            403,
+            'You are not assigned to this class.'
+        );
+
+        if ($assessment->status === 'approved') {
+            return back()->with('error', 'Approved assessments cannot be deleted.');
+        }
+
+        if ($assessment->examination_id && $assessment->examination->status === 'closed') {
+            return back()->with('error', 'Results for a closed examination cannot be deleted.');
+        }
+
+        DB::transaction(function () use ($assessment, $request, $user) {
+            $title = $assessment->title;
+            $assessment->delete();
+
+            AuditLog::record($user, 'assessment.deleted', "Deleted \"{$title}\"", $assessment);
+        });
 
         return back()->with('success', 'Assessment removed.');
     }

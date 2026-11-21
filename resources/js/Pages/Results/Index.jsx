@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { BookOpen, Filter, GraduationCap, Percent, Users } from 'lucide-react';
+import { BookOpen, Filter, GraduationCap, Info, Percent, Users } from 'lucide-react';
 import { router, usePage } from '@inertiajs/react';
 import DashboardLayout from '../../Layouts/DashboardLayout';
 import { Badge, Card, ProgressBar, StatCard } from '../../Components/ui';
 import { BarChartCard, ChartCard, DonutChart, TrendChart } from '../../Components/charts';
 import { BRAND } from '../../Components/ui';
 import { PageHeader } from '../../Components/page';
-
-const GRADES = ['A — Excellent', 'B — Very Good', 'C — Good', 'D — Satisfactory', 'E — Needs Support'];
 
 export default function ResultsIndex({
     overview,
@@ -16,8 +14,25 @@ export default function ResultsIndex({
     subjectAnalytics,
     examinationAnalytics,
     filters,
+    is_read_only = false,
+    user_role = '',
+    grade_distribution = [],
 }) {
     const [search, setSearch] = useState('');
+
+    const ROLE_LABELS = {
+        teacher: 'Teacher',
+        head_of_school: 'Head of School',
+        senior_pastor: 'Senior Pastor',
+    };
+    const user_role_label = ROLE_LABELS[user_role] ?? user_role;
+
+    const printParams = new URLSearchParams();
+    ['academic_year_id', 'term_id', 'examination_id', 'class_id', 'subject_id'].forEach((key) => {
+        const value = filters.selected[key];
+        if (value) printParams.set(key, value);
+    });
+    const printHref = `/results-analytics/print${printParams.toString() ? '?' + printParams.toString() : ''}`;
 
     const filteredStudents = studentPerformance.filter((s) =>
         s.student_name.toLowerCase().includes(search.toLowerCase())
@@ -28,7 +43,37 @@ export default function ResultsIndex({
             title="Results & Analytics"
             subtitle="Student performance, class analytics and subject comparisons"
         >
-            <PageHeader title="Results & Analytics" subtitle="Track academic performance across your classes" />
+            <PageHeader
+                title="Results & Analytics"
+                subtitle="Track academic performance across your classes"
+                action={
+                    <a
+                        href={printHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-ghost"
+                    >
+                        Print Report
+                    </a>
+                }
+            />
+
+            {/* Read-only indicator for leadership roles */}
+            {is_read_only && (
+                <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-start gap-3">
+                        <Info className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-800">
+                            <p className="font-bold">Read-Only Access</p>
+                            <p className="text-[12px] text-amber-700">
+                                You are viewing school-wide results as {user_role_label}. Marks entry, submission,
+                                approval and return are handled through the dedicated marks workflow — no edits can be
+                                made from this page.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="mb-6 glass-card p-4 sm:p-5">
@@ -153,6 +198,12 @@ export default function ResultsIndex({
                 />
                 <StatCard
                     icon={Percent}
+                    label="Submitted Awaiting Approval"
+                    value={overview.submitted_awaiting_approval ?? 0}
+                    accent="accent"
+                />
+                <StatCard
+                    icon={Percent}
                     label="Class Average"
                     value={`${overview.class_average}%`}
                     accent="secondary"
@@ -195,13 +246,32 @@ export default function ResultsIndex({
                 </ChartCard>
             </div>
 
+            {/* Examination performance trend (reuses existing examination analytics) */}
+            <div className="mb-6">
+                <ChartCard
+                    title="Examination Performance Trend"
+                    subtitle="Average percentage across examinations"
+                >
+                    <TrendChart
+                        data={examinationAnalytics.map((e) => ({
+                            examination: e.name,
+                            average: e.average,
+                        }))}
+                        xKey="examination"
+                        yKey="average"
+                        color={BRAND.primary}
+                        unit="%"
+                    />
+                </ChartCard>
+            </div>
+
             {/* Grade distribution */}
             <div className="mb-6">
                 <ChartCard title="Grade Distribution" subtitle="Distribution of grades across all recorded results">
                     <DonutChart
-                        data={GRADES.map((grade, i) => ({
-                            name: grade,
-                            value: filteredStudents.filter((s) => s.grade === grade).length,
+                        data={(grade_distribution ?? []).map((g) => ({
+                            name: g.label,
+                            value: g.count,
                         }))}
                     />
                 </ChartCard>
