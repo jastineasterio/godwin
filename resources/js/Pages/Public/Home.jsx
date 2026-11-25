@@ -37,31 +37,59 @@ const DEFAULT_HERO = {
 };
 
 function HeroSlider({ banners }) {
-    const hasBanners = banners && banners.length > 0;
+    const [imageStates, setImageStates] = useState({});
 
-    const slides = hasBanners
-        ? banners.map((b) => ({
-              id: b.id,
-              title: b.title,
-              subtitle: b.subtitle ?? '',
-              badge: b.cta_label ?? 'Admission Open',
-              image: b.image_path,
-              link: b.link,
-              gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
-          }))
+    const bannerSlides = banners
+        ? banners
+              .filter((b) => b.image_path && imageStates[b.id ?? b.image_path] !== 'error')
+              .map((b) => ({
+                  id: b.id,
+                  imageKey: b.id ?? b.image_path,
+                  title: b.title,
+                  subtitle: b.subtitle ?? '',
+                  badge: b.cta_label ?? 'Admission Open',
+                  cta_label: b.cta_label,
+                  image: b.image_path,
+                  link: b.link,
+                  gradient: 'from-[#013157] via-[#01579B] to-[#0288D1]',
+              }))
+        : [];
+
+    const slides = bannerSlides.length > 0
+        ? bannerSlides
         : [{ ...DEFAULT_HERO, isDefault: true }];
 
     const [index, setIndex] = useState(0);
-    const [imgLoaded, setImgLoaded] = useState(false);
-    const [imgError, setImgError] = useState(false);
     const timerRef = useRef(null);
-    const currentSlide = slides[index];
-    const shouldRotate = hasBanners && slides.length > 1;
+    const imageRef = useRef(null);
+    const currentIndex = Math.min(index, slides.length - 1);
+    const currentSlide = slides[currentIndex];
+    const shouldRotate = slides.length > 1;
+    const imageStatus = imageStates[currentSlide.imageKey] ?? 'pending';
 
     useEffect(() => {
-        setImgLoaded(false);
-        setImgError(false);
+        const image = imageRef.current;
 
+        if (!image?.complete) {
+            return;
+        }
+
+        const status = image.naturalWidth > 0 ? 'loaded' : 'error';
+
+        setImageStates((states) => (
+            states[currentSlide.imageKey] === status
+                ? states
+                : { ...states, [currentSlide.imageKey]: status }
+        ));
+    }, [currentSlide.imageKey]);
+
+    useEffect(() => {
+        if (index >= slides.length) {
+            setIndex(Math.max(0, slides.length - 1));
+        }
+    }, [index, slides.length]);
+
+    useEffect(() => {
         if (timerRef.current) clearInterval(timerRef.current);
 
         if (shouldRotate) {
@@ -75,22 +103,31 @@ function HeroSlider({ banners }) {
         };
     }, [slides.length, shouldRotate]);
 
-    const showImage = !currentSlide.isDefault && currentSlide.image && !imgError;
-    const bgGradient = `bg-gradient-to-br ${currentSlide.gradient}`;
+    const showImage = !currentSlide.isDefault && currentSlide.image && imageStatus !== 'error';
+    const background = currentSlide.isDefault
+        ? `bg-gradient-to-br ${currentSlide.gradient}`
+        : 'bg-slate-900';
 
     return (
-        <section className={`relative isolate overflow-hidden ${bgGradient}`}>
+        <section className={`relative isolate overflow-hidden ${background}`}>
             {/* ---- Background image layer (cross-faded) ---- */}
             {showImage && (
                 <img
-                    key={currentSlide.id ?? currentSlide.image}
+                    ref={imageRef}
+                    key={currentSlide.imageKey}
                     src={currentSlide.image}
                     alt=""
-                    onLoad={() => setImgLoaded(true)}
-                    onError={() => setImgError(true)}
-                    loading={index === 0 ? 'eager' : 'lazy'}
+                    onLoad={() => setImageStates((states) => ({
+                        ...states,
+                        [currentSlide.imageKey]: 'loaded',
+                    }))}
+                    onError={() => setImageStates((states) => ({
+                        ...states,
+                        [currentSlide.imageKey]: 'error',
+                    }))}
+                    loading={currentIndex === 0 ? 'eager' : 'lazy'}
                     className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-                        imgLoaded ? 'opacity-40' : 'opacity-0'
+                        imageStatus === 'loaded' ? 'opacity-40' : 'opacity-0'
                     }`}
                 />
             )}
@@ -106,7 +143,7 @@ function HeroSlider({ banners }) {
             {/* ---- Content overlay ---- */}
             <div className="relative mx-auto flex min-h-[440px] max-w-7xl flex-col items-center justify-center px-4 py-20 text-center text-white sm:min-h-[520px] sm:px-6 lg:min-h-[600px]">
                 <motion.span
-                    key={`badge-${index}`}
+                    key={`badge-${currentSlide.id ?? currentIndex}`}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
@@ -117,7 +154,7 @@ function HeroSlider({ banners }) {
                 </motion.span>
 
                 <motion.h1
-                    key={`title-${index}`}
+                    key={`title-${currentSlide.id ?? currentIndex}`}
                     initial={{ opacity: 0, y: 18 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2, duration: 0.5 }}
@@ -128,7 +165,7 @@ function HeroSlider({ banners }) {
 
                 {currentSlide.subtitle && (
                     <motion.p
-                        key={`sub-${index}`}
+                        key={`sub-${currentSlide.id ?? currentIndex}`}
                         initial={{ opacity: 0, y: 18 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.32, duration: 0.5 }}
@@ -140,7 +177,7 @@ function HeroSlider({ banners }) {
 
                 {(currentSlide.link || currentSlide.isDefault) && (
                     <motion.div
-                        key={`cta-${index}`}
+                        key={`cta-${currentSlide.id ?? currentIndex}`}
                         initial={{ opacity: 0, y: 18 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.44, duration: 0.5 }}
@@ -171,12 +208,12 @@ function HeroSlider({ banners }) {
                     <div className="mt-10 flex gap-2">
                         {slides.map((_, i) => (
                             <button
-                                key={i}
+                                key={slides[i].imageKey ?? i}
                                 type="button"
                                 onClick={() => setIndex(i)}
                                 aria-label={`Go to slide ${i + 1}`}
                                 className={`h-2 rounded-full transition-all duration-300 ${
-                                    i === index ? 'w-8 bg-accent' : 'w-2 bg-white/50 hover:bg-white/80'
+                                    i === currentIndex ? 'w-8 bg-accent' : 'w-2 bg-white/50 hover:bg-white/80'
                                 }`}
                             />
                         ))}

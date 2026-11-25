@@ -100,11 +100,11 @@ export default function PublicLayout({ children }) {
                             className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm lg:hidden"
                         />
                         <motion.aside
-                            initial={{ x: '100%' }}
+                            initial={{ x: '-100%' }}
                             animate={{ x: 0 }}
-                            exit={{ x: '100%' }}
+                            exit={{ x: '-100%' }}
                             transition={{ type: 'tween', duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                            className="fixed inset-y-0 right-0 z-50 flex w-[85%] max-w-sm flex-col bg-white shadow-2xl lg:hidden"
+                            className="fixed inset-y-0 left-0 z-50 flex w-[85%] max-w-sm flex-col bg-white shadow-2xl lg:hidden"
                         >
                             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                                 <Logo />
