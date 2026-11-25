@@ -1,37 +1,18 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link, usePage } from '@inertiajs/react';
-import { GraduationCap, MapPin, Menu, Phone, X } from 'lucide-react';
+import { MapPin, Menu, Phone, X } from 'lucide-react';
 import { Flash } from '../Components/ui';
-
+import { Logo } from '../Components/Logo';
 const NAV_LINKS = [
     { label: 'Home', href: '/' },
     { label: 'About Us', href: '/#about' },
+    { label: 'Our Story', href: '/#school-intro' },
     { label: 'Programs', href: '/#programs' },
     { label: 'Admissions', href: '/#admissions' },
     { label: 'News & Events', href: '/#news' },
     { label: 'Contact Us', href: '/#contact' },
 ];
-
-/** Brand logo — rounded monogram + wordmark (inline SVG, no asset needed). */
-export function Logo({ dark = false, className = '' }) {
-    return (
-        <span className={`flex items-center gap-2.5 ${className}`}>
-            <span className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary text-white shadow-lg shadow-primary/30">
-                <GraduationCap className="h-6 w-6" strokeWidth={2.3} />
-                <span className="absolute -bottom-1.5 -right-1.5 h-4 w-4 rounded-full bg-accent" />
-            </span>
-            <span className="leading-tight">
-                <span className={`block font-display text-lg font-extrabold ${dark ? 'text-white' : 'text-ink'}`}>
-                    God-Win
-                </span>
-                <span className={`block text-[10px] font-bold uppercase tracking-widest ${dark ? 'text-white/70' : 'text-primary'}`}>
-                    Daycare &amp; Nursery
-                </span>
-            </span>
-        </span>
-    );
-}
 
 export default function PublicLayout({ children }) {
     const { school, routes, auth } = usePage().props;

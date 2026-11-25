@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Announcement;
 use App\Models\Banner;
 use App\Models\SchoolEvent;
+use App\Models\SchoolIntroVideo;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -29,6 +30,14 @@ class HomeController extends Controller
                 'cta_label' => $b->cta_label,
             ]);
 
+        $video = SchoolIntroVideo::query()->active()->first();
+        $introVideo = $video ? [
+            'url' => $video->url(),
+            'original_name' => $video->original_name,
+            'mime_type' => $video->mime_type,
+            'file_size' => $video->file_size,
+        ] : null;
+
         return Inertia::render('Public/Home', [
             'banners' => $banners,
 
@@ -43,6 +52,8 @@ class HomeController extends Controller
                 ->upcoming()
                 ->take(5)
                 ->get(['id', 'title', 'description', 'start_date', 'start_time', 'location', 'color']),
+
+            'intro_video' => $introVideo,
         ]);
     }
 

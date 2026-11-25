@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Enums\ApplicationStatus;
 use App\Models\SchoolApplication;
 use App\Models\SchoolClass;
+use App\Services\Sms\AdmissionSmsNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,6 +18,13 @@ use Inertia\Response;
  */
 class ApplicationController extends Controller
 {
+    protected AdmissionSmsNotifier $admissionSms;
+
+    public function __construct(AdmissionSmsNotifier $admissionSms)
+    {
+        $this->admissionSms = $admissionSms;
+    }
+
     /** Render the multi-step registration form. */
     public function create(): Response
     {
@@ -49,12 +58,21 @@ class ApplicationController extends Controller
             'message' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $application = SchoolApplication::create([
-            ...$data,
-            'reference_no' => $this->nextReference(),
-            'status' => ApplicationStatus::Submitted,
-            'submitted_at' => now(),
-        ]);
+        $application = DB::transaction(function () use ($data) {
+            return SchoolApplication::create([
+                ...$data,
+                'reference_no' => $this->nextReference(),
+                'status' => ApplicationStatus::Submitted,
+                'submitted_at' => now(),
+            ]);
+        });
+
+        // Send the submission confirmation SMS directly (synchronously) after
+        // the application transaction has committed. SMS delivery is never a
+        // requirement for successful application submission: provider or
+        // network failures are caught by the notifier and logged, never
+        // rolling back the saved application. No queue job is dispatched.
+        $this->admissionSms->notify($application, 'submitted');
 
         return redirect()
             ->route('apply.create')

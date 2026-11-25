@@ -36,7 +36,7 @@ return new class extends Migration
             $table->index('status');
             $table->index('provider_type');
             $table->index('provider_message_id');
-            $table->unique('idempotency_key')->whereNotNull('idempotency_key');
+            $table->unique('idempotency_key'); // Multiple NULLs allowed; prevents duplicate non-null keys
             $table->index('created_at');
         });
     }

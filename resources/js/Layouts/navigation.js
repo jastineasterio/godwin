@@ -14,6 +14,7 @@ import {
     Megaphone,
     MessageSquare,
     Package,
+    Play,
     School,
     Settings,
     ShieldCheck,
@@ -45,7 +46,9 @@ export const NAV_BY_ROLE = {
         { label: 'Timetable', href: '/timetable', icon: CalendarDays },
         { label: 'Events', href: '/events', icon: CalendarDays },
         { label: 'Settings', href: '/settings', icon: Settings },
+        { label: 'Intro Video', href: '/settings/video', icon: Play },
         { label: 'SMS Providers', href: '/sms/admin/providers', icon: Smartphone },
+        { label: 'Admissions', href: '/admissions', icon: FileText },
     ],
     senior_pastor: [
         { label: 'Overview', href: '/dashboard', icon: Home },
@@ -75,6 +78,7 @@ export const NAV_BY_ROLE = {
         { label: 'Events', href: '/events', icon: CalendarDays },
         { label: 'SMS Dashboard', href: '/sms/dashboard', icon: Smartphone },
         { label: 'Results & Analytics', href: '/results-analytics', icon: BarChart3 },
+        { label: 'Admissions', href: '/admissions', icon: FileText },
     ],
     teacher: [
         { label: 'Overview', href: '/dashboard', icon: Home },

@@ -4,11 +4,14 @@ use App\Http\Controllers\Academics\AssessmentController;
 use App\Http\Controllers\Academics\ExaminationController;
 use App\Http\Controllers\Academics\ReportCardController;
 use App\Http\Controllers\Academics\TeacherResultController;
+use App\Http\Controllers\Admin\AdmissionApplicationController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SchoolIntroVideoController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\Sms\SmsCreditController;
 use App\Http\Controllers\Admin\Sms\SmsProviderController;
+use App\Http\Controllers\Admin\Sms\AdmissionSmsRecoveryController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsBulkController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsDashboardController;
 use App\Http\Controllers\HeadOfSchool\Sms\SmsHistoryController;
@@ -73,6 +76,18 @@ Route::middleware('auth')->group(function () {
         Route::resource('classes', SchoolClassController::class);
         Route::patch('classes/{class}/archive', [SchoolClassController::class, 'archive'])
             ->name('classes.archive');
+    });
+
+    /* ---- Online admission application management (Admin, HoS) ------ */
+    Route::middleware('role:admin,head_of_school')->prefix('admissions')->group(function () {
+        Route::get('/', [AdmissionApplicationController::class, 'index'])->name('admissions.index');
+        Route::get('/{application}', [AdmissionApplicationController::class, 'show'])->name('admissions.show');
+        Route::post('/{application}/review', [AdmissionApplicationController::class, 'review'])
+            ->name('admissions.review');
+        Route::post('/{application}/accept', [AdmissionApplicationController::class, 'accept'])
+            ->name('admissions.accept');
+        Route::post('/{application}/reject', [AdmissionApplicationController::class, 'reject'])
+            ->name('admissions.reject');
     });
 
     /* ---- Subjects management (Admin, Head of School) --------------- */
@@ -270,6 +285,12 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin')->prefix('settings')->group(function () {
         Route::get('/', [SettingsController::class, 'index'])->name('settings.index');
         Route::put('/{group}', [SettingsController::class, 'update'])->name('settings.update');
+
+        /* ---- School introduction video (Administrator only) ---------- */
+        Route::get('/video', [SchoolIntroVideoController::class, 'show'])->name('settings.video.show');
+        Route::post('/video', [SchoolIntroVideoController::class, 'store'])->name('settings.video.store');
+        Route::put('/video', [SchoolIntroVideoController::class, 'update'])->name('settings.video.update');
+        Route::delete('/video', [SchoolIntroVideoController::class, 'destroy'])->name('settings.video.destroy');
     });
 
     /* ---- 11. Audit Logs (Administrator only) -------------------------- */
@@ -324,6 +345,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/credits/purchase', [SmsCreditController::class, 'purchase'])->name('sms.admin.credits.purchase');
         Route::get('/credits/history', [SmsCreditController::class, 'history'])->name('sms.admin.credits.history');
         Route::post('/credits/{purchase}/retry', [SmsCreditController::class, 'retry'])->name('sms.admin.credits.retry');
+
+        Route::get('/admission-notifications/unresolved', [AdmissionSmsRecoveryController::class, 'index'])->name('sms.admin.admission-notifications');
+        Route::post('/admission-notifications/{message}/reconcile', [AdmissionSmsRecoveryController::class, 'reconcile'])->name('sms.admin.admission-notifications.reconcile');
+        Route::post('/admission-notifications/{message}/resend', [AdmissionSmsRecoveryController::class, 'resend'])->name('sms.admin.admission-notifications.resend');
     });
 
     /* ---- SMS: Head of School dashboard (HoS + Admin) --------------- */

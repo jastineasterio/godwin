@@ -19,10 +19,8 @@ class SmsProviderResolver
         'darsms' => DarsmsProvider::class,
     ];
 
-    /** @var SmsProviderInterface|null */
     protected ?SmsProviderInterface $resolved = null;
 
-    /** @var SmsProviderConfig|null */
     protected ?SmsProviderConfig $config = null;
 
     public function resolve(): ?SmsProviderInterface
@@ -105,7 +103,8 @@ class SmsProviderResolver
             'api_secret' => $config->decryptedApiSecret(),
             'sender_id' => $config->sender_id,
             'is_active' => $config->is_active,
-            'timeout' => $config->timeout_seconds ?? 30,
+            'connect_timeout' => $config->connect_timeout_seconds ?? 5,
+            'timeout' => $config->timeout_seconds ?? 10,
         ];
 
         return new $class($providerConfig);

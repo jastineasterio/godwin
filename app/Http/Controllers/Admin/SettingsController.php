@@ -75,6 +75,8 @@ class SettingsController extends Controller
                 'admissions.admissions_open' => 'true',
                 'admissions.application_message' => 'Admissions are currently open.',
                 'admissions.application_deadline' => '',
+                'admissions.application_submitted_sms_enabled' => 'true',
+                'admissions.application_accepted_sms_enabled' => 'true',
             ],
             'branding' => [
                 'branding.primary_color' => '#01579B',
@@ -119,6 +121,8 @@ class SettingsController extends Controller
                 'admissions_open' => ['required', 'boolean'],
                 'application_message' => ['nullable', 'string', 'max:500'],
                 'application_deadline' => ['nullable', 'date'],
+                'application_submitted_sms_enabled' => ['required', 'boolean'],
+                'application_accepted_sms_enabled' => ['required', 'boolean'],
             ],
             'branding' => [
                 'primary_color' => ['required', 'string', 'max:20'],

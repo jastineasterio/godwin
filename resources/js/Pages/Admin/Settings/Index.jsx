@@ -31,6 +31,8 @@ const DEFAULTS = {
         admissions_open: 'true',
         application_message: 'Admissions are currently open.',
         application_deadline: '',
+        application_submitted_sms_enabled: 'true',
+        application_accepted_sms_enabled: 'true',
     },
     branding: {
         primary_color: '#01579B',
@@ -175,6 +177,30 @@ export default function SettingsIndex({ settings, groups }) {
                                     <div>
                                         <span className="block text-sm font-semibold text-ink">Admissions Open</span>
                                         <span className="text-xs text-slate-500">Check to show that admissions are currently open to the public.</span>
+                                    </div>
+                                </label>
+                                <label className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.data.application_submitted_sms_enabled === 'true' || form.data.application_submitted_sms_enabled === true || form.data.application_submitted_sms_enabled === '1'}
+                                        onChange={(e) => form.setData('application_submitted_sms_enabled', e.target.checked ? 'true' : 'false')}
+                                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                    <div>
+                                        <span className="block text-sm font-semibold text-ink">SMS on Application Submitted</span>
+                                        <span className="text-xs text-slate-500">Send a Kiswahili confirmation SMS to the parent when a new online application is saved.</span>
+                                    </div>
+                                </label>
+                                <label className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.data.application_accepted_sms_enabled === 'true' || form.data.application_accepted_sms_enabled === true || form.data.application_accepted_sms_enabled === '1'}
+                                        onChange={(e) => form.setData('application_accepted_sms_enabled', e.target.checked ? 'true' : 'false')}
+                                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                    <div>
+                                        <span className="block text-sm font-semibold text-ink">SMS on Application Accepted</span>
+                                        <span className="text-xs text-slate-500">Send a Kiswahili acceptance SMS to the parent when staff accepts an application.</span>
                                     </div>
                                 </label>
                                 <Field label="Application Message" error={form.errors.application_message}>

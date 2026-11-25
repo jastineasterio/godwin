@@ -75,10 +75,12 @@ class DarsmsProvider implements SmsProviderInterface
             'api_key' => null,
             'api_secret' => null,
             'sender_id' => null,
-            'timeout' => 30,
+            'connect_timeout' => 5,
+            'timeout' => 10,
         ], $config);
 
-        $this->http = Http::timeout((int) $this->config['timeout']);
+        $this->http = Http::connectTimeout((int) $this->config['connect_timeout'])
+            ->timeout((int) $this->config['timeout']);
         $this->rateLimiter = $rateLimiter ?? app(DarsmsRateLimiter::class);
     }
 

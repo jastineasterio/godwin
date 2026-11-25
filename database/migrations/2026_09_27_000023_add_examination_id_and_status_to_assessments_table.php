@@ -20,10 +20,11 @@ return new class extends Migration
                 ->index();
         });
 
-        // One result per student per examination per subject
+        // One result per student per examination per subject.
+        // Composite unique on nullable examination_id: multiple NULLs allowed,
+        // non-null (student_id, examination_id, subject_id) combinations are unique.
         Schema::table('assessments', function (Blueprint $table) {
-            $table->unique(['student_id', 'examination_id', 'subject_id'])
-                ->whereNotNull('examination_id');
+            $table->unique(['student_id', 'examination_id', 'subject_id']);
         });
     }
 

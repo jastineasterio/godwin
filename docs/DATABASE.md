@@ -89,34 +89,167 @@ settings (key/value), banners, contact_messages, notifications (Laravel morph)
 * `Payment::scopeCompleted()` + `scopeBetween()` → monthly revenue series
 * `Conversation::unreadCountFor($userId)` → unread message badges
 
-## Switching local dev from SQLite → MySQL 8.0
+## Switching local dev from SQLite → MySQL 8.4
 
-This machine's MySQL listens on **port 3307** (see `C:\ProgramData\MySQL\MySQL Server 8.0\my.ini`).
+The application has been migrated from SQLite to MySQL 8.4.3 as the primary
+development database. The original SQLite database (`database/database.sqlite`)
+remains untouched as a permanent fallback, along with its verified backup
+(`database/backups/godwin_backup_20261122_011109.sqlite`).
+
+### Target database
+
+- **Host:** 127.0.0.1
+- **Port:** 3306
+- **Database:** `godwin_local_mysql`
+- **Username:** root
+- **Password:** (empty in local dev)
+
+> **Never** use the existing `godwin` MySQL database — it contains unrelated
+> records and must not be modified.
+
+### Environment variables
+
+Required in `.env`:
+
+| Variable | Value | Purpose |
+|---|---|---|
+| `DB_CONNECTION` | `mysql` | Default connection |
+| `DB_HOST` | `127.0.0.1` | MySQL host |
+| `DB_PORT` | `3306` | MySQL port |
+| `DB_DATABASE` | `godwin_local_mysql` | Target database name |
+| `DB_USERNAME` | `root` | MySQL username |
+| `DB_PASSWORD` | `` | MySQL password |
+
+Isolated import connection (used for one-time data migration only):
+
+| Variable | Value |
+|---|---|
+| `MYSQL_IMPORT_HOST` | `127.0.0.1` |
+| `MYSQL_IMPORT_PORT` | `3306` |
+| `MYSQL_IMPORT_DATABASE` | `godwin_local_mysql` |
+| `MYSQL_IMPORT_USERNAME` | `root` |
+| `MYSQL_IMPORT_PASSWORD` | `` |
+
+### Running migrations
 
 ```powershell
-# 1. Create the database (replace the password prompt as needed)
-mysql -u root -P 3307 -h 127.0.0.1 -p -e "CREATE DATABASE godwin_sms CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
-
-# 2. Edit .env  →  copy the block from .env.example (already MySQL-ready):
-#    DB_CONNECTION=mysql
-#    DB_PORT=3307
-#    DB_DATABASE=godwin_sms
-#    DB_USERNAME=root
-#    DB_PASSWORD=<your-password>
-
-# 3. Migrate & verify
+# Run all migrations against MySQL (default connection)
 php artisan migrate
-php database/verify_schema.php
+
+# Check migration status
+php artisan migrate:status
+
+# Rollback last batch
+php artisan migrate:rollback
 ```
 
-## Verification
+> **Never** run `php artisan migrate:fresh` or `php artisan db:wipe` — these
+> would destroy existing data.
+
+### One-time SQLite → MySQL data migration
+
+A one-time data migration command was created to transfer all application data
+from SQLite to MySQL:
 
 ```powershell
-php artisan migrate:fresh --force   # 30 migrations
-php database/verify_schema.php      # 44 relationship/integrity assertions
-vendor\bin\pint --test app database # code style
+php artisan migrate:sqlite-to-mysql
 ```
 
-The verification script builds a realistic graph inside a DB transaction
-(every role, two children under one parent, attendance, invoices, payments,
-messaging, CMS) and **rolls it back**, so it is safe to run repeatedly.
+This command:
+- Reads directly from `database/database.sqlite`
+- Writes to `godwin_local_mysql` via the `mysql_import` connection
+- Preserves all primary keys, foreign keys, timestamps, nullable values, JSON, booleans, and soft deletes
+- Uses foreign-key-safe insertion order
+- Disables FK checks only within the controlled import transaction
+- Does **not** copy the `migrations` table (MySQL maintains its own migration history)
+- Does **not** use `INSERT IGNORE` or silently skip records
+
+### Backing up MySQL
+
+```powershell
+# Full backup
+mysqldump -u root -h 127.0.0.1 -P 3306 godwin_local_mysql > backup_godwin_$(Get-Date -Format 'yyyyMMdd_HHmmss').sql
+
+# Schema only
+mysqldump -u root -h 127.0.0.1 -P 3306 --no-data godwin_local_mysql > schema_only.sql
+
+# Data only
+mysqldump -u root -h 127.0.0.1 -P 3306 --no-create-info godwin_local_mysql > data_only.sql
+```
+
+### Restoring MySQL from backup
+
+```powershell
+# Restore full backup
+mysql -u root -h 127.0.0.1 -P 3306 godwin_local_mysql < backup_file.sql
+
+# Restore into a fresh database
+mysql -u root -h 127.0.0.1 -P 3306 -e "CREATE DATABASE godwin_local_mysql CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+mysql -u root -h 127.0.0.1 -P 3306 godwin_local_mysql < backup_file.sql
+```
+
+### Using SQLite as fallback
+
+To fall back to SQLite, update `.env`:
+
+```powershell
+DB_CONNECTION=sqlite
+# DB_DATABASE is not needed for SQLite (defaults to database/database.sqlite)
+```
+
+Then run `php artisan config:clear`. The SQLite database and backup remain
+untouched in `database/` as a permanent fallback.
+
+### Running tests
+
+```powershell
+php vendor/bin/phpunit
+```
+
+Tests run against an in-memory SQLite database (see `phpunit.xml`) and do not
+affect the MySQL development database.
+
+### Production database configuration
+
+For production, set the following environment variables:
+
+| Variable | Description |
+|---|---|
+| `DB_CONNECTION` | `mysql` |
+| `DB_HOST` | Production MySQL host |
+| `DB_PORT` | `3306` |
+| `DB_DATABASE` | Production database name |
+| `DB_USERNAME` | Production MySQL username |
+| `DB_PASSWORD` | Production MySQL password |
+| `DB_CHARSET` | `utf8mb4` |
+| `DB_COLLATION` | `utf8mb4_0900_ai_ci` |
+
+Never commit `.env` or database backups to Git (see `.gitignore`).
+
+### Migration compatibility fixes
+
+The following SQLite→MySQL compatibility issues were fixed:
+
+1. **`sms_provider_configs`** — Replaced partial unique index
+   `$table->unique('is_active')->where('is_active', true)` (MySQL-incompatible)
+   with a nullable `active_slot` column + unique index. Model events maintain
+   `active_slot = 1` when active, `NULL` otherwise. This enforces "only one
+   active provider at a time" at the database level on both MySQL and SQLite.
+
+2. **`sms_messages`** — Replaced partial unique index
+   `$table->unique('idempotency_key')->whereNotNull('idempotency_key')`
+   with a regular `$table->unique('idempotency_key')`. MySQL allows multiple
+   NULLs in a unique index, preserving the idempotency semantics.
+
+3. **`assessments`** — Replaced partial unique index
+   `$table->unique([...])->whereNotNull('examination_id')` with a regular
+   composite `$table->unique(['student_id', 'examination_id', 'subject_id'])`.
+   Nullable `examination_id` behaves correctly: multiple NULLs allowed,
+   non-null combinations are unique.
+
+### Verification
+
+After migration, all 37 application tables were verified to have matching row
+counts between SQLite and MySQL (1,481 total rows). Foreign key integrity,
+soft deletes, encrypted credentials, JSON data, financial totals, and
+auto-increment counters were all validated.

@@ -12,7 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import { Flash } from '../Components/ui';
-import { Logo } from './PublicLayout';
+import { Logo } from '../Components/Logo';
 import { NAV_BY_ROLE, ROLE_LABELS } from './navigation';
 
 /* ===========================================================================
@@ -69,7 +69,7 @@ function SidebarNav({ onNavigate }) {
 function SidebarBrand({ onClose }) {
     return (
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
-            <Logo dark />
+            <Logo size="sm" dark />
             {onClose && (
                 <button
                     type="button"
@@ -267,7 +267,7 @@ export default function DashboardLayout({ children, title, subtitle }) {
                             G
                         </button>
                     ) : (
-                        <Logo dark />
+                        <Logo size="sm" dark />
                     )}
                 </div>
 

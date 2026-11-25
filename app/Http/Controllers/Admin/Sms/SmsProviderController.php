@@ -105,7 +105,7 @@ class SmsProviderController extends Controller
         DB::transaction(function () use ($validated) {
             // Only one provider can be active at a time.
             if ((bool) ($validated['is_active'] ?? false)) {
-                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false, 'active_slot' => null]);
             }
 
             SmsProviderConfig::create([
@@ -155,7 +155,7 @@ class SmsProviderController extends Controller
         DB::transaction(function () use ($config, $validated, $activating) {
             // Only one provider can be active at a time.
             if ($activating) {
-                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false, 'active_slot' => null]);
             }
 
             $config->update($this->sanitizeCredentialUpdate($validated, $config));
@@ -186,7 +186,7 @@ class SmsProviderController extends Controller
         DB::transaction(function () use ($config, $desired) {
             // Only one provider can be active at a time.
             if ($desired && ! $config->is_active) {
-                SmsProviderConfig::where('is_active', true)->update(['is_active' => false]);
+                SmsProviderConfig::where('is_active', true)->update(['is_active' => false, 'active_slot' => null]);
             }
 
             $config->update(['is_active' => $desired]);

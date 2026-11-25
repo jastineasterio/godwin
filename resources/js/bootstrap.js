@@ -26,6 +26,8 @@ const SMS_ROUTES = {
     'sms.results.students': '/sms/results/students',
     'sms.admin.credits.purchase': '/sms/admin/credits/purchase',
     'sms.admin.credits.retry': (id) => `/sms/admin/credits/${encodeURIComponent(id)}/retry`,
+    'sms.admin.admission-notifications.reconcile': (id) => `/sms/admin/admission-notifications/${encodeURIComponent(id)}/reconcile`,
+    'sms.admin.admission-notifications.resend': (id) => `/sms/admin/admission-notifications/${encodeURIComponent(id)}/resend`,
 };
 
 window.route = (name, param = null) => {

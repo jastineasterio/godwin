@@ -12,11 +12,13 @@ import {
     Heart,
     MapPin,
     Phone,
+    Play,
     ShieldCheck,
     Sparkles,
 } from 'lucide-react';
 import PublicLayout from '../../Layouts/PublicLayout';
 import { SectionHeading } from '../../Components/ui';
+import { Logo } from '../../Components/Logo';
 
 /* ===========================================================================
  * Hero slider — full-bleed poster images managed via admin CMS
@@ -240,6 +242,70 @@ function PillarCards({ school }) {
                         <p className="mt-3 text-sm leading-relaxed text-slate-600">{pillar.text}</p>
                     </motion.article>
                 ))}
+            </div>
+        </section>
+    );
+}
+
+/* ===========================================================================
+ * School identity + introduction video section
+ * Positioned between Vision/Mission/Motto and Our Programs.
+ *
+ * Desktop: logo (left) + video player (right) in two columns.
+ * Mobile: logo first, then video underneath in a single column.
+ * ======================================================================== */
+
+function IdentitySection({ intro_video }) {
+    const hasVideo = !!intro_video;
+
+    return (
+        <section id="school-intro" className="scroll-mt-24 py-16 lg:py-20 bg-canvas">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <SectionHeading
+                    eyebrow="Our Story"
+                    title="Get to Know God-Win"
+                    description="Watch our school introduction and see the learning environment we provide for every child."
+                />
+
+                <div className="mt-12 lg:mt-16 grid gap-8 lg:gap-12 lg:grid-cols-2 items-start">
+                    {/* Left column — school logo */}
+                    <div className="flex flex-col items-center justify-center text-center lg:text-left">
+                        <div className="w-full max-w-[480px] rounded-2xl border border-slate-200 bg-white shadow-sm p-3 flex items-center justify-center">
+                            <Logo size="xl" wordmark={false} imgClassName="w-full h-auto max-w-full! max-h-[270px]! object-contain" />
+                        </div>
+                    </div>
+
+                    {/* Right column — introduction video */}
+                    <div className="flex flex-col items-center justify-center lg:items-start lg:justify-start w-full">
+                        <div className="w-full aspect-video lg:aspect-video max-w-lg lg:max-w-none">
+                            {hasVideo ? (
+                                <video
+                                    src={intro_video.url}
+                                    controls
+                                    preload="metadata"
+                                    className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm"
+                                    poster=""
+                                />
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+                                    <div className="grid h-16 w-16 place-items-center rounded-full bg-slate-200 text-slate-400 mb-4">
+                                        <Play className="h-8 w-8" />
+                                    </div>
+                                    <h3 className="font-semibold text-ink">No introduction video yet</h3>
+                                    <p className="mt-1 text-sm text-slate-500 text-center">
+                                        The school introduction video will appear here once
+                                        uploaded by the administrator.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        <p className="mt-3 text-xs text-slate-500 text-center lg:text-left">
+                            {hasVideo
+                                ? intro_video.original_name
+                                : 'HTML5 video player — play, pause, volume, seek, fullscreen'}
+                        </p>
+                    </div>
+                </div>
             </div>
         </section>
     );
@@ -530,7 +596,7 @@ function ContactSection({ school }) {
  * Page composition
  * ======================================================================== */
 
-export default function Home({ banners, news, events }) {
+export default function Home({ banners, news, events, intro_video }) {
     const { school } = usePage().props;
 
     // Support /#section deep links from the nav on an already-loaded page
@@ -544,6 +610,7 @@ export default function Home({ banners, news, events }) {
         <PublicLayout>
             <HeroSlider banners={banners} />
             <PillarCards school={school} />
+            <IdentitySection intro_video={intro_video} />
             <ProgramsSection />
             <NewsSection news={news} events={events} />
             <ContactSection school={school} />

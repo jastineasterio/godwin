@@ -1,7 +1,7 @@
 import { useForm, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, LockKeyhole, Mail } from 'lucide-react';
-import { Logo } from '../../Layouts/PublicLayout';
+import { Logo } from '../../Components/Logo';
 
 /* ===========================================================================
  * Staff / Parent sign-in (students NEVER log in).
@@ -35,7 +35,7 @@ export default function Login({ status, canResetPassword }) {
             >
                 <div className="rounded-3xl border border-white/10 bg-white p-7 shadow-2xl sm:p-9">
                     <div className="flex flex-col items-center text-center">
-                        <Logo />
+                        <Logo size="lg" />
                         <h1 className="mt-6 font-display text-2xl font-extrabold text-ink">
                             Welcome back
                         </h1>

@@ -8,6 +8,7 @@ use App\Models\SmsCampaign;
 use App\Models\SmsMessage;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * High-level SMS message sending service.
@@ -68,13 +69,27 @@ class SmsMessageService
                 ->first();
 
             if ($existing) {
+                if (in_array($existing->status, ['queued', 'sent', 'delivered'], true)) {
+                    return [
+                        'success' => true,
+                        'messageId' => $existing->provider_message_id,
+                        'batchId' => $existing->batch_id,
+                        'idempotent' => true,
+                        'status' => $existing->status,
+                        'providerStatus' => $existing->provider_status,
+                    ];
+                }
+
                 return [
-                    'success' => true,
+                    'success' => false,
                     'messageId' => $existing->provider_message_id,
                     'batchId' => $existing->batch_id,
                     'idempotent' => true,
                     'status' => $existing->status,
                     'providerStatus' => $existing->provider_status,
+                    'error' => $existing->error_message,
+                    'code' => 'idempotent_existing',
+                    'resend_required' => $existing->status === 'submission_unknown',
                 ];
             }
         }
@@ -167,6 +182,7 @@ class SmsMessageService
             'error' => $result['error'] ?? null,
             'rate_limited' => $result['rate_limited'] ?? false,
             'ambiguous' => $result['ambiguous'] ?? false,
+            'status_code' => $result['status_code'] ?? null,
             'internal_id' => $messageRecord->id,
         ];
     }
@@ -436,37 +452,146 @@ class SmsMessageService
             ];
         }
 
-        $idempotencyKey = 'sms_resend:'.$message->id;
+        return DB::transaction(function () use ($message, $user, $reason) {
+            // Re-check under lock so concurrent retry attempts cannot both proceed.
+            $message = SmsMessage::where('id', $message->id)
+                ->lockForUpdate()
+                ->first();
 
-        $result = $this->send(
-            $message->to,
-            $message->message,
-            [
-                'sender_id' => $message->sender_id,
-                'user' => $user,
-                'campaign' => $message->campaign,
-                'category' => $message->category,
-                'idempotency_key' => $idempotencyKey,
-                'metadata' => array_merge($message->metadata ?? [], [
-                    'resend_of' => $message->id,
-                    'resend_reason' => $reason,
-                    'resend_by' => $user->id,
-                    'resend_at' => now()->toISOString(),
-                ]),
-            ]
-        );
+            if (! $message || ! in_array($message->status, ['submission_unknown', 'failed'], true)) {
+                return [
+                    'success' => false,
+                    'error' => 'Message cannot be resent in its current status.',
+                    'code' => 'not_resendable',
+                ];
+            }
 
-        if ($result['success'] && ! ($result['rate_limited'] ?? false) && ! ($result['idempotent'] ?? false)) {
+            // Idempotency guard for the retry record itself, checked under the
+            // same lock so concurrent retries cannot both reach the provider.
+            $resendKey = 'sms_resend:'.$message->id;
+            $alreadyRetried = SmsMessage::where('idempotency_key', $resendKey)
+                ->where('to', $message->to)
+                ->exists();
+
+            if ($alreadyRetried) {
+                return [
+                    'success' => true,
+                    'idempotent' => true,
+                    'messageId' => null,
+                    'status' => null,
+                    'error' => null,
+                    'code' => 'idempotent',
+                ];
+            }
+
+            $result = $this->send(
+                $message->to,
+                $message->message,
+                [
+                    'sender_id' => $message->sender_id,
+                    'user' => $user,
+                    'campaign' => $message->campaign,
+                    'category' => $message->category,
+                    'idempotency_key' => $resendKey,
+                    'metadata' => array_merge($message->metadata ?? [], [
+                        'resend_of' => $message->id,
+                        'resend_reason' => $reason,
+                        'resend_by' => $user->id,
+                        'resend_at' => now()->toISOString(),
+                    ]),
+                ]
+            );
+
+            if ($result['success'] && ! ($result['rate_limited'] ?? false) && ! ($result['idempotent'] ?? false)) {
+                $message->deliveryEvents()->create([
+                    'status' => $result['status'] ?? $message->status,
+                    'provider_status' => $result['providerStatus'] ?? null,
+                    'occurred_at' => now(),
+                    'error_message' => 'Manual resend: '.($reason ?? 'no reason provided'),
+                    'raw_data' => ['resend_of' => $message->id, 'resend_by' => $user->id],
+                ]);
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * Reconcile a submission_unknown message using the provider's message
+     * status lookup. DARSMS exposes GET /integrations/sms/status/{id}, so an
+     * accepted-but-unconfirmed submission can often be resolved to queued,
+     * sent, delivered or failed without resending anything.
+     */
+    public function reconcileSubmissionUnknown(SmsMessage $message): array
+    {
+        if ($message->status !== 'submission_unknown') {
+            return [
+                'success' => false,
+                'error' => 'Message is not in submission_unknown state.',
+                'code' => 'not_reconcilable',
+                'status' => $message->status,
+            ];
+        }
+
+        $provider = $this->resolver->resolve();
+
+        if (! $provider || ! $provider->supportsDeliveryStatus()) {
+            return [
+                'success' => false,
+                'error' => 'Delivery status tracking not supported.',
+                'code' => 'unsupported_operation',
+                'status' => 'submission_unknown',
+            ];
+        }
+
+        if (! $message->provider_message_id) {
+            return [
+                'success' => false,
+                'error' => 'No provider message ID available to verify the submission.',
+                'code' => 'no_provider_id',
+                'status' => 'submission_unknown',
+                'reconcilable' => false,
+            ];
+        }
+
+        $result = $provider->checkDeliveryStatus($message->provider_message_id);
+
+        if (! $result['success']) {
+            return [
+                'success' => false,
+                'error' => $result['error'] ?? 'Unable to verify submission with provider.',
+                'code' => 'provider_lookup_failed',
+                'status' => 'submission_unknown',
+            ];
+        }
+
+        $previousStatus = $message->status;
+
+        $message->update([
+            'provider_status' => $result['providerStatus'] ?? null,
+            'status' => $this->mapProviderStatus($result['providerStatus'] ?? null, true),
+            'sent_at' => $result['sentAt'] ?? $message->sent_at,
+            'delivered_at' => $result['deliveredAt'] ?? null,
+            'error_message' => $result['errorMessage'] ?? null,
+        ]);
+
+        if ($message->status !== $previousStatus) {
             $message->deliveryEvents()->create([
-                'status' => $result['status'] ?? $message->status,
+                'status' => $message->status,
                 'provider_status' => $result['providerStatus'] ?? null,
                 'occurred_at' => now(),
-                'error_message' => 'Manual resend: '.($reason ?? 'no reason provided'),
-                'raw_data' => ['resend_of' => $message->id, 'resend_by' => $user->id],
+                'error_message' => $result['errorMessage'] ?? null,
+                'raw_data' => ['reconciled' => true, 'provider_message_id' => $message->provider_message_id],
             ]);
         }
 
-        return $result;
+        return [
+            'success' => true,
+            'status' => $message->status,
+            'provider_status' => $message->provider_status,
+            'messageId' => $message->provider_message_id,
+            'reconciled' => true,
+        ];
     }
 
     /**

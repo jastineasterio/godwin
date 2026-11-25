@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('password_encrypted')->nullable(); // For future providers
             $table->string('sender_id')->nullable();       // Default sender ID
             $table->boolean('is_active')->default(false);  // Only one active at a time
+            $table->integer('active_slot')->nullable();    // DB-level single-active enforcement (1 when active, NULL otherwise)
             $table->integer('timeout_seconds')->default(30);
             $table->json('capabilities')->nullable();      // Capability flags
             $table->json('endpoint_config')->nullable();   // Endpoint configuration
@@ -31,7 +32,7 @@ return new class extends Migration
 
             $table->index('provider_type');
             $table->index('is_active');
-            $table->unique('is_active')->where('is_active', true); // MySQL partial unique
+            $table->unique('active_slot'); // Multiple NULLs allowed; only one non-null active slot
         });
     }
 

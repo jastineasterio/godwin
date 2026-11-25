@@ -38,6 +38,7 @@ class SmsProviderConfig extends Model
         'password_encrypted',
         'sender_id',
         'is_active',
+        'active_slot',
         'timeout_seconds',
         'capabilities',
         'endpoint_config',
@@ -51,17 +52,57 @@ class SmsProviderConfig extends Model
     {
         return [
             'is_active' => 'boolean',
+            'active_slot' => 'integer',
             'capabilities' => 'array',
             'endpoint_config' => 'array',
             'last_tested_at' => 'datetime',
         ];
     }
 
-    /* ------------------------------------------------------------------ */
-    /* Encrypted credential accessors */
-    /* ------------------------------------------------------------------ */
+    /**
+     * Boot the model: keep active_slot in sync with is_active / soft-delete state.
+     * active_slot = id when active and not soft-deleted, otherwise NULL.
+     * The unique index on active_slot enforces one active provider at DB level.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $config) {
+            $config->active_slot = $config->computeActiveSlot();
+        });
 
-    /** Set the raw API key (encrypted at rest). */
+        static::deleting(function (self $config) {
+            if (! is_null($config->deleted_at)) {
+                return;
+            }
+            // Soft-delete: release the active slot if this was the active provider.
+            if ($config->is_active) {
+                self::where('id', $config->id)
+                    ->update(['is_active' => false, 'active_slot' => null]);
+            }
+        });
+
+        static::restored(function (self $config) {
+            $config->active_slot = $config->computeActiveSlot();
+            $config->saveQuietly();
+        });
+    }
+
+    /**
+     * Compute the active_slot value: 1 when active and not deleted, else NULL.
+     * The unique index on active_slot enforces one active provider at DB level.
+     */
+    protected function computeActiveSlot(): ?int
+    {
+        if ($this->is_active && is_null($this->deleted_at)) {
+            return 1;
+        }
+
+        return null;
+    }
+
+    /**
+     * Set the raw API key (encrypted at rest).
+     */
     public function setApiKeyAttribute(?string $value): void
     {
         $this->attributes['api_key_encrypted'] = $value ? encrypt($value) : null;
